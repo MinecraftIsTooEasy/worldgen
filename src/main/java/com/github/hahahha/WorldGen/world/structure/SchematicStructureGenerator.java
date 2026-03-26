@@ -2,6 +2,7 @@ package com.github.hahahha.WorldGen.world.structure;
 
 import com.github.hahahha.WorldGen.WorldGen;
 import com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig;
+import com.github.hahahha.WorldGen.world.structure.data.StructureGenerationDataStore;
 import java.util.Objects;
 import java.util.Random;
 import net.minecraft.Block;
@@ -10,18 +11,18 @@ import net.minecraft.TileEntity;
 import net.minecraft.World;
 import net.minecraft.WorldGenerator;
 
-/**
- * 真正执行方块放置的生成器。
- */
 public class SchematicStructureGenerator extends WorldGenerator {
     private static final int MIN_WORLD_Y = 0;
     private static final int MAX_WORLD_Y = 255;
 
     private final String schematicPath;
+    private final String structureName;
     private final boolean centerOnAnchor;
     private final int minPlacementY;
     private final int maxPlacementY;
     private final int yOffset;
+    private final int minDistance;
+    private final StructureWorldgenConfig.DistanceScope distanceScope;
 
     private SchematicData schematicData;
     private boolean loadAttempted;
@@ -33,10 +34,13 @@ public class SchematicStructureGenerator extends WorldGenerator {
     public SchematicStructureGenerator(StructureWorldgenConfig config) {
         StructureWorldgenConfig safeConfig = Objects.requireNonNull(config, "config");
         this.schematicPath = safeConfig.schematicPath();
+        this.structureName = safeConfig.structureName();
         this.centerOnAnchor = safeConfig.centerOnAnchor();
         this.minPlacementY = safeConfig.minY();
         this.maxPlacementY = safeConfig.maxY();
         this.yOffset = safeConfig.yOffset();
+        this.minDistance = safeConfig.minDistance();
+        this.distanceScope = safeConfig.distanceScope();
     }
 
     @Override
@@ -55,7 +59,6 @@ public class SchematicStructureGenerator extends WorldGenerator {
             return false;
         }
 
-        // 计算结构放置原点。
         int originX = this.centerOnAnchor ? x - width / 2 : x;
         int originZ = this.centerOnAnchor ? z - length / 2 : z;
         int originY = y + this.yOffset;
@@ -72,7 +75,37 @@ public class SchematicStructureGenerator extends WorldGenerator {
             return false;
         }
 
-        // 先放置方块。
+        int minX = originX;
+        int maxX = originX + width - 1;
+        int minZ = originZ;
+        int maxZ = originZ + length - 1;
+        if (this.minDistance > 0) {
+            boolean sameNameOnly = this.distanceScope == StructureWorldgenConfig.DistanceScope.SAME_NAME;
+            if (StructureGenerationDataStore.hasNearbyStructure(
+                    world,
+                    world.getDimensionId(),
+                    minX,
+                    maxX,
+                    minZ,
+                    maxZ,
+                    this.minDistance,
+                    resolveStructureNameForSpacing(),
+                    sameNameOnly)) {
+                return false;
+            }
+        }
+
+        for (int sx = 0; sx < width; ++sx) {
+            for (int sy = 0; sy < height; ++sy) {
+                for (int sz = 0; sz < length; ++sz) {
+                    int wx = originX + sx;
+                    int wy = originY + sy;
+                    int wz = originZ + sz;
+                    world.setBlock(wx, wy, wz, 0, 0, 2);
+                }
+            }
+        }
+
         for (int sx = 0; sx < width; ++sx) {
             for (int sy = 0; sy < height; ++sy) {
                 for (int sz = 0; sz < length; ++sz) {
@@ -99,7 +132,6 @@ public class SchematicStructureGenerator extends WorldGenerator {
             }
         }
 
-        // 再恢复 TileEntity（箱子、告示牌等）。
         for (NBTTagCompound sourceTag : this.schematicData.getTileEntityTags()) {
             if (sourceTag == null) {
                 continue;
@@ -132,6 +164,16 @@ public class SchematicStructureGenerator extends WorldGenerator {
             }
         }
 
+        StructureGenerationDataStore.recordStructure(
+                world,
+                this.schematicPath,
+                this.structureName,
+                originX,
+                originY,
+                originZ,
+                width,
+                height,
+                length);
         return true;
     }
 
@@ -146,12 +188,12 @@ public class SchematicStructureGenerator extends WorldGenerator {
 
         this.schematicData = SchematicLoader.load(this.schematicPath);
         if (this.schematicData == null) {
-            WorldGen.LOGGER.warn("结构文件加载失败: {}", this.schematicPath);
+            WorldGen.LOGGER.warn("Structure file load failed: {}", this.schematicPath);
             return false;
         }
 
         WorldGen.LOGGER.info(
-                "结构文件已加载: {} ({}x{}x{})",
+                "Structure file loaded: {} ({}x{}x{})",
                 this.schematicPath,
                 this.schematicData.getWidth(),
                 this.schematicData.getHeight(),
@@ -175,5 +217,28 @@ public class SchematicStructureGenerator extends WorldGenerator {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private String resolveStructureNameForSpacing() {
+        if (this.structureName != null) {
+            String trimmed = this.structureName.trim();
+            if (!trimmed.isEmpty()) {
+                return trimmed;
+            }
+        }
+        String path = this.schematicPath;
+        if (path == null || path.isEmpty()) {
+            return "unknown";
+        }
+        String normalized = path.replace('\\', '/');
+        int slash = normalized.lastIndexOf('/');
+        String name = slash >= 0 && slash + 1 < normalized.length()
+                ? normalized.substring(slash + 1)
+                : normalized;
+        String lower = name.toLowerCase();
+        if (lower.endsWith(".schematic")) {
+            name = name.substring(0, name.length() - ".schematic".length());
+        }
+        return name.isEmpty() ? "unknown" : name;
     }
 }

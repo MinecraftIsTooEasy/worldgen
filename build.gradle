@@ -73,6 +73,7 @@ processResources {
 // 设置Java编译版本为17
 tasks.withType(JavaCompile).configureEach {
     it.options.release = 17
+    it.options.encoding = 'UTF-8'
 }
 
 java {

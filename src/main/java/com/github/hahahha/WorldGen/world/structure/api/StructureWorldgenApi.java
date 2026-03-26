@@ -53,8 +53,9 @@ public final class StructureWorldgenApi {
         }
 
         WorldGen.LOGGER.info(
-                "Registered structure worldgen path={} dim={} weight={} chance=1/{} attempts={} surface={} y={}..{} yOffset={} centerOnAnchor={}",
+                "Registered structure worldgen path={} name={} dim={} weight={} chance=1/{} attempts={} surface={} y={}..{} yOffset={} centerOnAnchor={} minDistance={} distanceScope={}",
                 config.schematicPath(),
+                config.structureName(),
                 config.dimension(),
                 config.weight(),
                 config.chance(),
@@ -63,7 +64,9 @@ public final class StructureWorldgenApi {
                 config.minY(),
                 config.maxY(),
                 config.yOffset(),
-                config.centerOnAnchor());
+                config.centerOnAnchor(),
+                config.minDistance(),
+                config.distanceScope());
     }
 
     public static void register(

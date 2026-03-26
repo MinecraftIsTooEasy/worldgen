@@ -1,83 +1,199 @@
-# 结构生成 API 使用说明（WorldGen 模组）
+# WorldGen Structure Generation
 
-这个模组已经内置了 `.schematic` 结构生成能力，并提供了公开 API。  
-其他模组只需要传“遗迹文件路径 + 几个参数”，就可以注册世界结构生成。
+Chinese version: `README_WORLDGEN_API_CN.md`
 
-## 1. 你要调用的 API
+This mod provides two independent entry points:
+
+1. Player config entry: `config/worldgen-structures.jsonc`
+2. Developer API entry: `StructureWorldgenApi` / `StructureWorldgenConfig`
+
+These two paths do not affect each other.
+
+## Player Config
+
+On first start, these are auto-created:
+
+- `config/worldgen-structures.jsonc`
+- `schematics/` (sibling to `config/`)
+
+Config file format is JSONC (JSON + comments).
+
+### Path rules (`schematicsDir` + `schematicPath`)
+
+`schematicPath` supports:
+
+1. Classpath resource: `"/assets/<modid>/structures/<name>.schematic"` or `"classpath:assets/<modid>/structures/<name>.schematic"`
+2. Absolute path: `"F:/your/path/<name>.schematic"`
+3. Relative path: `"ruins/<name>.schematic"` (resolved from `schematicsDir`)
+
+`schematicsDir` default is `"schematics"` and is resolved as a config-sibling folder:
+
+- normal runtime: `.minecraft/schematics`
+- version/pack runtime: `<version-or-pack-dir>/schematics`
+- dev workspace: `run/schematics`
+
+Note: classpath resources come from packaged mod resources (`src/main/resources`), not from `run/`.
+
+### Default template
+
+```jsonc
+{
+  "enabled": true,
+  "schematicsDir": "schematics",
+  "structures": []
+}
+```
+
+### Root fields
+
+- `enabled`: global switch.
+- `schematicsDir`: base directory for relative `schematicPath`.
+- `structures`: structure entry array.
+
+### Structure entry fields
+
+- `enabled`: per-entry switch.
+- `name` (optional): custom structure display/search name for the structure compass.
+- `schematicPath`: structure file path.
+- `dimension`: `overworld` / `the_nether` / `the_end`.
+- `weight`: registration weight, `>= 1`.
+- `chance`: denominator of probability, `>= 1` (for example `40` means about `1/40`).
+- `attempts`: attempts per decoration pass, `>= 1`.
+- `surface`: `true` uses surface height, `false` uses random `minY..maxY`.
+- `minY`: minimum Y, `0..255`.
+- `maxY`: maximum Y, `0..255` and `>= minY`.
+- `yOffset`: final Y offset.
+- `centerOnAnchor`: center-align structure to anchor.
+- `minDistance` (optional): minimum horizontal distance to existing generated structure boxes. Default `0` (disabled).
+- `distanceScope` (optional): spacing scope, `all` (default) or `same_name`.
+- `biomeMode` (optional): `whitelist` or `blacklist`.
+- `biomeIds` (optional): biome id list, such as `[4, 21]`.
+- `biomeNames` (optional): biome name list, such as `["Forest", "Taiga"]`.
+
+`biomeIds` and `biomeNames` can be used together.
+
+### Example
+
+```jsonc
+{
+  "enabled": true,
+  "schematicsDir": "schematics",
+  "structures": [
+    {
+      "enabled": true,
+      "name": "test1",
+      "schematicPath": "test1.schematic",
+      "dimension": "overworld",
+      "weight": 1,
+      "chance": 40,
+      "attempts": 1,
+      "surface": true,
+      "minY": 0,
+      "maxY": 255,
+      "yOffset": 0,
+      "centerOnAnchor": true,
+      "minDistance": 256,
+      "distanceScope": "all",
+      "biomeMode": "whitelist",
+      "biomeNames": ["Forest", "Taiga"]
+    },
+    {
+      "enabled": true,
+      "name": "test2",
+      "schematicPath": "test2.schematic",
+      "dimension": "the_nether",
+      "weight": 1,
+      "chance": 40,
+      "attempts": 1,
+      "surface": true,
+      "minY": 0,
+      "maxY": 255,
+      "yOffset": 0,
+      "centerOnAnchor": true,
+      "minDistance": 384,
+      "distanceScope": "same_name"
+    }
+  ]
+}
+```
+
+## Generation behavior
+
+- Before placement, the generator clears the full schematic cuboid (`width * height * length`) with air.
+- Then it places non-air blocks from schematic data and restores tile entities.
+- On success, it records generated structure path/name/dimension/position/size for later search and spacing checks.
+- Spacing checks are same-dimension only and use horizontal (XZ) bounding-box distance.
+- If actual distance is `< minDistance`, this generation attempt is skipped.
+
+## Structure Compass (creative only)
+
+- Item name: `Structure Compass` (`结构指南针` in Chinese translation).
+- Texture uses vanilla compass texture key (`compass`).
+- No survival obtain method is added; item is available in creative tab `Tools`.
+- Right click opens a GUI, no manual command typing required.
+
+### GUI behavior
+
+- Vanilla structure buttons are filtered by current dimension.
+- Custom structure buttons are loaded from config names and filtered by current dimension (max 10 buttons).
+- You can still type a custom query manually in the input box.
+- `List` button shows queryable structures (vanilla + custom records).
+
+### Search behavior
+
+- Backend command is `/wgs <query>` (GUI sends it automatically).
+- Search radius is fixed at `20000` blocks.
+- Maximum returned results per search is `5`.
+- Custom structure search uses generated records only (no retroactive backfill for old worlds).
+- Vanilla search supports known + predictive positions (including unloaded regions) and merges overlapping candidates for large structures.
+
+### Queryable vanilla structure IDs
+
+- `fortress` (Nether)
+- `stronghold` (Overworld)
+- `village` (Overworld)
+- `mineshaft` (Overworld)
+- `temple` (Overworld)
+- `desert_pyramid` (Overworld)
+- `jungle_pyramid` (Overworld)
+- `witch_hut` (Overworld)
+
+## Developer API (compatible)
 
 - `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi`
 - `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig`
 
-## 2. 遗迹文件路径支持两种写法
-
-- 资源路径（推荐）  
-  `/assets/<你的modid>/structures/<文件名>.schematic`
-- 本地文件路径（调试方便）  
-  `F:/your/path/<文件名>.schematic`
-
-## 3. 最简注册示例（只填路径）
+Simple example:
 
 ```java
-import com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi;
-
 StructureWorldgenApi.register(event, "/assets/examplemod/structures/ruin_a.schematic");
 ```
 
-默认参数：
-
-- 维度：`OVERWORLD`
-- 权重：`1`
-- 概率：`1/40`
-- 尝试次数：`1`
-- 高度策略：地表（`surface(true)`）
-- Y 范围：`0..255`
-- Y 偏移：`0`
-- 对齐方式：结构中心对齐锚点（`centerOnAnchor(true)`）
-
-## 4. 完整注册示例（自定义参数）
+Builder example with newer fields:
 
 ```java
-import com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi;
-import com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig;
-import moddedmite.rustedironcore.api.world.Dimension;
-
-StructureWorldgenApi.register(
-    event,
-    StructureWorldgenConfig.builder("/assets/examplemod/structures/ruin_a.schematic")
+StructureWorldgenConfig config = StructureWorldgenApi.builder("F:/packs/schematics/ruin_a.schematic")
+        .structureName("ruin_a")
         .dimension(Dimension.OVERWORLD)
-        .weight(2)
-        .chance(30)          // 约 1/30
-        .attempts(2)
-        .surface(false)      // 关闭地表策略，使用 yRange 随机高度
-        .yRange(20, 80)
+        .weight(1)
+        .chance(40)
+        .attempts(1)
+        .surface(true)
+        .yRange(0, 255)
         .yOffset(0)
         .centerOnAnchor(true)
-        .build()
-);
+        .minDistance(256)
+        .distanceScope(StructureWorldgenConfig.DistanceScope.ALL)
+        .build();
+
+StructureWorldgenApi.register(event, config);
 ```
 
-## 5. 参数说明
+## Optional file API
 
-- `dimension(Dimension.xxx)`：生成维度
-- `weight(int)`：注册权重
-- `chance(int)`：概率分母，N 表示约 `1/N`
-- `attempts(int)`：每次装饰阶段尝试次数
-- `surface(boolean)`：
-  - `true` 用地表高度
-  - `false` 用 `yRange(min,max)` 随机高度
-- `yRange(minY, maxY)`：非地表模式高度范围（`0..255`）
-- `yOffset(int)`：在最终高度上再加偏移
-- `centerOnAnchor(boolean)`：
-  - `true` 锚点在结构中心
-  - `false` 锚点在结构角点
-- `biomeFilter(predicate)`：按生物群系过滤
-
-## 6. 在模组初始化中接入
-
-你自己的模组里，一般在 `BiomeDecoration` 注册事件中调用上述 API：
+- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfigFileApi`
 
 ```java
-Handlers.BiomeDecoration.registerPre(YourWorldgenRegistration::registerStructures);
+StructureWorldgenConfigFileApi.registerFromDefaultConfig(event);
+StructureWorldgenConfigFileApi.registerFromFile(event, new File("config/my-structures.jsonc"));
 ```
-
-然后在 `registerStructures(BiomeDecorationRegisterEvent event)` 里执行 `StructureWorldgenApi.register(...)` 即可。

@@ -12,7 +12,13 @@ public final class StructureWorldgenConfig {
     public static final int MIN_WORLD_Y = 0;
     public static final int MAX_WORLD_Y = 255;
 
+    public enum DistanceScope {
+        ALL,
+        SAME_NAME
+    }
+
     private final String schematicPath;
+    private final String structureName;
     private final Dimension dimension;
     private final int weight;
     private final int chance;
@@ -22,10 +28,13 @@ public final class StructureWorldgenConfig {
     private final int maxY;
     private final int yOffset;
     private final boolean centerOnAnchor;
+    private final int minDistance;
+    private final DistanceScope distanceScope;
     private final Predicate<BiomeGenBase> biomeFilter;
 
     private StructureWorldgenConfig(Builder builder) {
         this.schematicPath = builder.schematicPath;
+        this.structureName = builder.structureName;
         this.dimension = builder.dimension;
         this.weight = builder.weight;
         this.chance = builder.chance;
@@ -35,6 +44,8 @@ public final class StructureWorldgenConfig {
         this.maxY = builder.maxY;
         this.yOffset = builder.yOffset;
         this.centerOnAnchor = builder.centerOnAnchor;
+        this.minDistance = builder.minDistance;
+        this.distanceScope = builder.distanceScope;
         this.biomeFilter = builder.biomeFilter;
     }
 
@@ -44,6 +55,10 @@ public final class StructureWorldgenConfig {
 
     public String schematicPath() {
         return this.schematicPath;
+    }
+
+    public String structureName() {
+        return this.structureName;
     }
 
     public Dimension dimension() {
@@ -82,6 +97,14 @@ public final class StructureWorldgenConfig {
         return this.centerOnAnchor;
     }
 
+    public int minDistance() {
+        return this.minDistance;
+    }
+
+    public DistanceScope distanceScope() {
+        return this.distanceScope;
+    }
+
     public Predicate<BiomeGenBase> biomeFilter() {
         return this.biomeFilter;
     }
@@ -91,6 +114,7 @@ public final class StructureWorldgenConfig {
         // 1) 资源路径：/assets/<modid>/structures/xxx.schematic
         // 2) 文件路径：F:/path/to/xxx.schematic
         private String schematicPath;
+        private String structureName;
 
         private Dimension dimension = Dimension.OVERWORLD;
         private int weight = 1;
@@ -101,6 +125,8 @@ public final class StructureWorldgenConfig {
         private int maxY = MAX_WORLD_Y;
         private int yOffset = 0;
         private boolean centerOnAnchor = true;
+        private int minDistance = 0;
+        private DistanceScope distanceScope = DistanceScope.ALL;
         private Predicate<BiomeGenBase> biomeFilter;
 
         private Builder(String schematicPath) {
@@ -109,6 +135,11 @@ public final class StructureWorldgenConfig {
 
         public Builder schematicPath(String schematicPath) {
             this.schematicPath = schematicPath;
+            return this;
+        }
+
+        public Builder structureName(String structureName) {
+            this.structureName = structureName;
             return this;
         }
 
@@ -153,6 +184,16 @@ public final class StructureWorldgenConfig {
             return this;
         }
 
+        public Builder minDistance(int minDistance) {
+            this.minDistance = minDistance;
+            return this;
+        }
+
+        public Builder distanceScope(DistanceScope distanceScope) {
+            this.distanceScope = distanceScope;
+            return this;
+        }
+
         public Builder biomeFilter(Predicate<BiomeGenBase> biomeFilter) {
             this.biomeFilter = biomeFilter;
             return this;
@@ -160,6 +201,7 @@ public final class StructureWorldgenConfig {
 
         public StructureWorldgenConfig build() {
             this.schematicPath = normalizePath(this.schematicPath);
+            this.structureName = normalizePath(this.structureName);
             if (this.schematicPath == null) {
                 throw new IllegalArgumentException("schematicPath must not be empty");
             }
@@ -177,6 +219,12 @@ public final class StructureWorldgenConfig {
             }
             if (this.minY < MIN_WORLD_Y || this.maxY > MAX_WORLD_Y || this.minY > this.maxY) {
                 throw new IllegalArgumentException("yRange must be inside 0..255 and minY <= maxY");
+            }
+            if (this.minDistance < 0) {
+                throw new IllegalArgumentException("minDistance must be >= 0");
+            }
+            if (this.distanceScope == null) {
+                throw new IllegalArgumentException("distanceScope must not be null");
             }
             return new StructureWorldgenConfig(this);
         }
