@@ -2,7 +2,7 @@
  * Pure API worldgen registration example for test10.schematic.
  */
 
-/**package com.github.hahahha.WorldGen.world.structure.example;
+package com.github.hahahha.WorldGen.world.structure.example;
 
 import com.github.hahahha.WorldGen.world.structure.StructureLootProfile;
 import com.github.hahahha.WorldGen.world.structure.api.StructureLootApi;
@@ -59,4 +59,4 @@ public final class Test10ApiStructureRegistration {
                 .build();
         StructureWorldgenApi.register(event, config);
     }
-}*/
+}
