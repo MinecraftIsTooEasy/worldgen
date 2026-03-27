@@ -1,4 +1,5 @@
 ﻿item.structure_compass.name=结构指南针
+item.treasure_map.name=藏宝图
 
 worldgen.gui.structure_compass.title=结构指南针
 worldgen.gui.structure_compass.current_dimension=当前维度: %s
@@ -52,3 +53,15 @@ worldgen.command.structure_compass.list.custom.item=- %s
 worldgen.command.structure_compass.query.alias.list_zh=列表
 worldgen.command.structure_compass.query.alias.queryable_zh=可查询
 worldgen.command.structure_compass.query.alias.help_zh=帮助
+worldgen.item.treasure_map.prefix=[藏宝图] %s
+worldgen.item.treasure_map.world_unavailable=当前世界不可用，无法搜索结构。
+worldgen.item.treasure_map.bind.success=已锁定目标 %s，坐标: (%d, %d, %d)，距离: %d。
+worldgen.item.treasure_map.bind.locked=这张藏宝图已固定为该坐标，无法再次改绑。
+worldgen.item.treasure_map.bind.current=固定目标 %s，坐标: (%d, %d, %d)，维度: %s
+worldgen.item.treasure_map.search.unsupported_dimension=目标 %s 不在当前维度生成 (%s)。
+worldgen.item.treasure_map.search.not_found=在 %d 格范围内未找到结构: %s
+worldgen.item.treasure_map.tooltip.target=目标: %s
+worldgen.item.treasure_map.tooltip.unbound=右键查找最近目标并锁定本藏宝图。
+worldgen.item.treasure_map.tooltip.bound=已锁定: %s
+worldgen.item.treasure_map.tooltip.position=坐标: (%d, %d, %d)
+worldgen.item.treasure_map.tooltip.dimension=维度: %s

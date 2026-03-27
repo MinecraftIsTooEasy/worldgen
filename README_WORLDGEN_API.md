@@ -40,7 +40,11 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 {
   "enabled": true,
   "schematicsDir": "schematics",
-  "structures": []
+  "structures": [],
+  "loot": {
+    "enabled": true,
+    "profiles": []
+  }
 }
 ```
 
@@ -49,6 +53,9 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 - `enabled`: global switch.
 - `schematicsDir`: base directory for relative `schematicPath`.
 - `structures`: structure entry array.
+- `loot.enabled`: global marker-chest loot switch (recommended).
+- `loot.profiles`: loot profile array (recommended).
+- Legacy root keys are still supported: `lootTableEnabled` / `lootEnabled` / `lootProfiles`.
 
 ### Structure entry fields
 
@@ -66,11 +73,41 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 - `centerOnAnchor`: center-align structure to anchor.
 - `minDistance` (optional): minimum horizontal distance to existing generated structure boxes. Default `0` (disabled).
 - `distanceScope` (optional): spacing scope, `all` (default) or `same_name`.
+- `lootTableEnabled` (optional, legacy): override switch for this structure entry (alias: `lootEnabled`). If absent, uses root loot switch.
+- `lootProfile` (optional, legacy): loot profile id, default `default`. Controls marker-chest loot rules.
+- `loot.enabled` (optional, recommended): per-structure loot switch. If absent, uses root `loot.enabled`.
+- `loot.profile` (optional, recommended): per-structure loot profile id, default `default`.
 - `biomeMode` (optional): `whitelist` or `blacklist`.
 - `biomeIds` (optional): biome id list, such as `[4, 21]`.
 - `biomeNames` (optional): biome name list, such as `["Forest", "Taiga"]`.
 
 `biomeIds` and `biomeNames` can be used together.
+
+### Loot profiles (player editable)
+
+Recommended layout is a root `loot` block (placed below `structures` for readability):
+
+- `loot.enabled`: enable/disable marker-chest loot table replacement.
+- `loot.profiles`: profile array.
+- Each structure can choose profile via `loot.profile`.
+
+`lootProfiles` entry fields:
+
+- `id`: profile id.
+- `markers`: marker-to-level mapping array.
+- `markers[].item`: item registry-like name (recommended), such as `"minecraft:stick"` / `"stick"` / `"item.stick"`.
+- `markers[].itemId`: numeric item id (legacy compatible).
+- `markers[].level`: marker level.
+- `levels`: level table array.
+- `levels[].level`: level index.
+- `levels[].minRolls` / `levels[].maxRolls`: min/max roll count per chest.
+- `levels[].entries`: loot pool array.
+- `levels[].entries[].item`: item registry-like name (recommended).
+- `levels[].entries[].itemId`: numeric item id (legacy compatible).
+- `levels[].entries[].meta` / `min` / `max` / `weight`: entry metadata, count range, and weight.
+- `levels[].artifactChances` (optional): extra array passed to `WeightedRandomChestContent.generateChestContents`.
+
+If a chest in schematic contains exactly one marker item, loot is generated when loot switch is enabled (`loot.enabled`, legacy `lootTableEnabled`) using selected profile (`loot.profile`, legacy `lootProfile`).
 
 ### Example
 
@@ -95,7 +132,11 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
       "minDistance": 256,
       "distanceScope": "all",
       "biomeMode": "whitelist",
-      "biomeNames": ["Forest", "Taiga"]
+      "biomeNames": ["Forest", "Taiga"],
+      "loot": {
+        "enabled": true,
+        "profile": "default"
+      }
     },
     {
       "enabled": true,
@@ -111,9 +152,17 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
       "yOffset": 0,
       "centerOnAnchor": true,
       "minDistance": 384,
-      "distanceScope": "same_name"
+      "distanceScope": "same_name",
+      "loot": {
+        "enabled": true,
+        "profile": "default"
+      }
     }
-  ]
+  ],
+  "loot": {
+    "enabled": true,
+    "profiles": []
+  }
 }
 ```
 
@@ -121,6 +170,9 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 
 - Before placement, the generator clears the full schematic cuboid (`width * height * length`) with air.
 - Then it places non-air blocks from schematic data and restores tile entities.
+- It also reads and spawns `Entities` from the schematic (player entities are ignored).
+- Marker-chest loot generation is supported: if a chest in schematic contains exactly one marker item, it will be replaced with generated loot on placement.
+- Default marker mapping: `stick->1`, `flint->2`, `coal->3`, `iron_ingot->4`, `gold_ingot->5`, `diamond->6`.
 - On success, it records generated structure path/name/dimension/position/size for later search and spacing checks.
 - Spacing checks are same-dimension only and use horizontal (XZ) bounding-box distance.
 - If actual distance is `< minDistance`, this generation attempt is skipped.
@@ -158,22 +210,69 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 - `jungle_pyramid` (Overworld)
 - `witch_hut` (Overworld)
 
+## Treasure Map (one-time binding)
+
+- A default `Treasure Map` item is provided in creative tab `Tools`.
+- Default target query is `stronghold`. First right click finds the nearest target and stores fixed coordinates in item NBT.
+- After binding, right click only reports the fixed coordinates and will not rebind.
+- Search output goes directly to chat; both vanilla structure IDs and custom structure names are supported.
+
+### Treasure map developer API
+
+- `com.github.hahahha.WorldGen.world.structure.api.TreasureMapApi`
+- `com.github.hahahha.WorldGen.item.treasure.TreasureMapDefinition`
+
+Example (call before item registration event):
+
+```java
+TreasureMapApi.register(
+        TreasureMapApi.builder("examplemod:desert_treasure_map", "desert_pyramid")
+                .namespace("examplemod")
+                .textureName("desert_treasure_map")
+                .unlocalizedName("desert_treasure_map")
+                .itemName("item.examplemod.desert_treasure_map.name", "Desert Treasure Map")
+                .targetDisplayName("Desert Pyramid")
+                .searchRadius(30000)
+                .build());
+```
+
 ## Developer API (compatible)
 
 - `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi`
 - `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig`
+- `com.github.hahahha.WorldGen.world.structure.api.StructureLootApi`
+- `com.github.hahahha.WorldGen.world.structure.StructureLootProfile`
 
-Simple example:
+Example source file (pure API registration, no config-file mixing):
+
+- `com.github.hahahha.WorldGen.world.structure.example.Test10ApiStructureRegistration`
+
+`test10.schematic` example (explicit loot-profile registration + full explicit default structure parameters):
 
 ```java
-StructureWorldgenApi.register(event, "/assets/examplemod/structures/ruin_a.schematic");
-```
+private static final StructureLootProfile TEST10_LOOT_PROFILE = StructureLootApi.builder("test10_loot")
+        .marker(Item.stick, 1)
+        .marker(Item.diamond, 6)
+        .level(
+                1,
+                3,
+                5,
+                new WeightedRandomChestContent[]{
+                        StructureLootApi.entry(Item.coal, 0, 1, 3, 20),
+                        StructureLootApi.entry(Item.flint, 0, 1, 2, 15)
+                })
+        .level(
+                6,
+                6,
+                9,
+                new WeightedRandomChestContent[]{
+                        StructureLootApi.entry(Item.diamond, 0, 1, 2, 10),
+                        StructureLootApi.entry(Item.ingotGold, 0, 2, 5, 18)
+                })
+        .build();
 
-Builder example with newer fields:
-
-```java
-StructureWorldgenConfig config = StructureWorldgenApi.builder("F:/packs/schematics/ruin_a.schematic")
-        .structureName("ruin_a")
+StructureWorldgenConfig config = StructureWorldgenApi.builder("/assets/worldgen/structures/test10.schematic")
+        .structureName("test10")
         .dimension(Dimension.OVERWORLD)
         .weight(1)
         .chance(40)
@@ -182,8 +281,10 @@ StructureWorldgenConfig config = StructureWorldgenApi.builder("F:/packs/schemati
         .yRange(0, 255)
         .yOffset(0)
         .centerOnAnchor(true)
-        .minDistance(256)
+        .minDistance(0)
         .distanceScope(StructureWorldgenConfig.DistanceScope.ALL)
+        .lootTableEnabled(true)
+        .lootProfile(TEST10_LOOT_PROFILE)
         .build();
 
 StructureWorldgenApi.register(event, config);

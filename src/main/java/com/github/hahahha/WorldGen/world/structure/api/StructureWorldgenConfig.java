@@ -1,5 +1,7 @@
 package com.github.hahahha.WorldGen.world.structure.api;
 
+import com.github.hahahha.WorldGen.world.structure.StructureLootProfile;
+import com.github.hahahha.WorldGen.world.structure.StructureLootProfiles;
 import java.util.function.Predicate;
 import moddedmite.rustedironcore.api.world.Dimension;
 import net.minecraft.BiomeGenBase;
@@ -30,6 +32,8 @@ public final class StructureWorldgenConfig {
     private final boolean centerOnAnchor;
     private final int minDistance;
     private final DistanceScope distanceScope;
+    private final boolean lootTableEnabled;
+    private final StructureLootProfile lootProfile;
     private final Predicate<BiomeGenBase> biomeFilter;
 
     private StructureWorldgenConfig(Builder builder) {
@@ -46,6 +50,8 @@ public final class StructureWorldgenConfig {
         this.centerOnAnchor = builder.centerOnAnchor;
         this.minDistance = builder.minDistance;
         this.distanceScope = builder.distanceScope;
+        this.lootTableEnabled = builder.lootTableEnabled;
+        this.lootProfile = builder.lootProfile;
         this.biomeFilter = builder.biomeFilter;
     }
 
@@ -105,6 +111,14 @@ public final class StructureWorldgenConfig {
         return this.distanceScope;
     }
 
+    public boolean lootTableEnabled() {
+        return this.lootTableEnabled;
+    }
+
+    public StructureLootProfile lootProfile() {
+        return this.lootProfile;
+    }
+
     public Predicate<BiomeGenBase> biomeFilter() {
         return this.biomeFilter;
     }
@@ -127,6 +141,8 @@ public final class StructureWorldgenConfig {
         private boolean centerOnAnchor = true;
         private int minDistance = 0;
         private DistanceScope distanceScope = DistanceScope.ALL;
+        private boolean lootTableEnabled = true;
+        private StructureLootProfile lootProfile = StructureLootProfiles.defaultProfile();
         private Predicate<BiomeGenBase> biomeFilter;
 
         private Builder(String schematicPath) {
@@ -194,6 +210,16 @@ public final class StructureWorldgenConfig {
             return this;
         }
 
+        public Builder lootTableEnabled(boolean lootTableEnabled) {
+            this.lootTableEnabled = lootTableEnabled;
+            return this;
+        }
+
+        public Builder lootProfile(StructureLootProfile lootProfile) {
+            this.lootProfile = lootProfile;
+            return this;
+        }
+
         public Builder biomeFilter(Predicate<BiomeGenBase> biomeFilter) {
             this.biomeFilter = biomeFilter;
             return this;
@@ -225,6 +251,9 @@ public final class StructureWorldgenConfig {
             }
             if (this.distanceScope == null) {
                 throw new IllegalArgumentException("distanceScope must not be null");
+            }
+            if (this.lootProfile == null) {
+                throw new IllegalArgumentException("lootProfile must not be null");
             }
             return new StructureWorldgenConfig(this);
         }

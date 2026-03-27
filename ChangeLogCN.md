@@ -1,3 +1,11 @@
+V1.0.2
+- 新增纯 API 示例注册文件：`com.github.hahahha.WorldGen.world.structure.example.Test10ApiStructureRegistration`。
+- 使用 `test10.schematic` 进行结构注册示例，结构参数全部显式填写为默认值，便于直接对照修改。
+- 示例中显式注册并绑定 `test10_loot` 战利品 Profile（`lootProfile(...)`），不再仅使用默认战利品表。
+- 结构注册入口改为 API-only 示例，不再与 `config/worldgen-structures.jsonc` 的文件注册混用。
+- 玩家配置战利品写法增强：支持推荐写法 `loot.enabled` / `loot.profiles` 与结构级 `loot.enabled` / `loot.profile`，并兼容旧键。
+- 中英文 README 的 API 示例已同步到 `test10.schematic` 和显式战利品配置写法。
+
 V1.0.1
 - 新增玩家配置入口：`config/worldgen-structures.jsonc`（JSONC，可注释），普通玩家可直接配置结构生成。
 - 新增 `schematicsDir` 基础目录配置，支持 classpath / 绝对路径 / 相对路径三种 `schematicPath`。

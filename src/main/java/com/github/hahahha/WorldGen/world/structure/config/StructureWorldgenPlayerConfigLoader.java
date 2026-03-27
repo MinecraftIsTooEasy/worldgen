@@ -1,6 +1,8 @@
 package com.github.hahahha.WorldGen.world.structure.config;
 
 import com.github.hahahha.WorldGen.WorldGen;
+import com.github.hahahha.WorldGen.world.structure.StructureLootProfile;
+import com.github.hahahha.WorldGen.world.structure.StructureLootProfiles;
 import com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi;
 import com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig;
 import com.google.gson.JsonArray;
@@ -11,19 +13,28 @@ import com.google.gson.stream.JsonReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Predicate;
 import moddedmite.rustedironcore.api.event.events.BiomeDecorationRegisterEvent;
 import moddedmite.rustedironcore.api.world.Dimension;
 import net.minecraft.BiomeGenBase;
+import net.minecraft.Item;
+import net.minecraft.WeightedRandomChestContent;
+import net.xiaoyu233.fml.api.INamespaced;
 
 /**
  * Loads structure worldgen entries from a player-facing config file.
@@ -37,8 +48,15 @@ public final class StructureWorldgenPlayerConfigLoader {
 
     private static final String ROOT_ENABLED_KEY = "enabled";
     private static final String ROOT_SCHEMATICS_DIR_KEY = "schematicsDir";
+    private static final String ROOT_LOOT_TABLE_ENABLED_KEY = "lootTableEnabled";
+    private static final String ROOT_LOOT_ENABLED_ALIAS_KEY = "lootEnabled";
+    private static final String ROOT_LOOT_KEY = "loot";
+    private static final String ROOT_LOOT_ENABLED_CHILD_KEY = "enabled";
+    private static final String ROOT_LOOT_PROFILES_CHILD_KEY = "profiles";
+    private static final String ROOT_LOOT_PROFILES_KEY = "lootProfiles";
     private static final String STRUCTURES_KEY = "structures";
     private static final String ENTRY_ENABLED_KEY = "enabled";
+    private static final String ENTRY_LOOT_KEY = "loot";
     private static final String SCHEMATIC_PATH_KEY = "schematicPath";
     private static final String STRUCTURE_NAME_KEY = "name";
     private static final String DIMENSION_KEY = "dimension";
@@ -52,29 +70,65 @@ public final class StructureWorldgenPlayerConfigLoader {
     private static final String CENTER_ON_ANCHOR_KEY = "centerOnAnchor";
     private static final String MIN_DISTANCE_KEY = "minDistance";
     private static final String DISTANCE_SCOPE_KEY = "distanceScope";
+    private static final String LOOT_TABLE_ENABLED_KEY = "lootTableEnabled";
+    private static final String LOOT_ENABLED_ALIAS_KEY = "lootEnabled";
+    private static final String LOOT_ENABLED_KEY = "enabled";
+    private static final String LOOT_PROFILE_KEY = "lootProfile";
+    private static final String LOOT_PROFILE_ALIAS_KEY = "profile";
     private static final String BIOME_MODE_KEY = "biomeMode";
     private static final String BIOME_IDS_KEY = "biomeIds";
     private static final String BIOME_NAMES_KEY = "biomeNames";
 
+    private static final String LOOT_PROFILE_ID_KEY = "id";
+    private static final String LOOT_PROFILE_MARKERS_KEY = "markers";
+    private static final String LOOT_PROFILE_LEVELS_KEY = "levels";
+    private static final String LOOT_MARKER_ITEM_KEY = "item";
+    private static final String LOOT_MARKER_ITEM_ID_KEY = "itemId";
+    private static final String LOOT_MARKER_LEVEL_KEY = "level";
+    private static final String LOOT_LEVEL_MIN_ROLLS_KEY = "minRolls";
+    private static final String LOOT_LEVEL_MAX_ROLLS_KEY = "maxRolls";
+    private static final String LOOT_LEVEL_ENTRIES_KEY = "entries";
+    private static final String LOOT_LEVEL_ARTIFACT_CHANCES_KEY = "artifactChances";
+    private static final String LOOT_ENTRY_ITEM_KEY = "item";
+    private static final String LOOT_ENTRY_ITEM_ID_KEY = "itemId";
+    private static final String LOOT_ENTRY_META_KEY = "meta";
+    private static final String LOOT_ENTRY_MIN_KEY = "min";
+    private static final String LOOT_ENTRY_MAX_KEY = "max";
+    private static final String LOOT_ENTRY_WEIGHT_KEY = "weight";
+
+    private static Map<String, Integer> cachedItemAliasToId;
+
     private static final String DEFAULT_CONFIG_TEMPLATE = """
             // WorldGen player config (JSONC: comments are allowed)
-            // WorldGen 玩家配置（JSONC，支持注释）
             //
-            // Usage / 用法:
-            // 1) Edit objects in "structures" or duplicate them.
-            //    编辑或复制 "structures" 里的条目。
+            // Path rules:
+            // - schematicPath supports:
+            //   1) classpath path: "/assets/<modid>/structures/<name>.schematic"
+            //   2) absolute path: "F:/your/path/<name>.schematic"
+            //   3) relative path: resolved from "schematicsDir"
             //
-            // 2) "schematicPath" supports / 支持:
-            //    - Classpath resource / 资源路径: "/assets/<modid>/structures/<name>.schematic"
-            //    - Absolute file path / 绝对路径: "F:/your/path/<name>.schematic"
-            //    - Relative file path / 相对路径: resolved from "schematicsDir"
-            //      (default config-sibling "schematics" / 默认是与 config 同级的 "schematics")
+            // Marker chest loot guide:
+            // - A chest in schematic triggers loot replacement only when it contains exactly ONE marker item.
+            // - Root loot switch: loot.enabled (legacy alias: lootTableEnabled / lootEnabled).
+            // - Root loot profiles: loot.profiles (legacy alias: lootProfiles).
+            // - Structure loot switch: structure.loot.enabled (legacy alias: lootTableEnabled / lootEnabled).
+            // - Structure loot profile: structure.loot.profile (legacy alias: lootProfile).
+            // - markers[] item:
+            //   { "item": "minecraft:stick", "level": 1 }   // preferred
+            //   { "itemId": 280, "level": 1 }               // backward compatible
+            // - levels[] item:
+            //   {
+            //     "level": 1,
+            //     "minRolls": 2,
+            //     "maxRolls": 4,
+            //     "entries": [
+            //       { "item": "minecraft:coal", "meta": 0, "min": 1, "max": 3, "weight": 20 }
+            //     ]
+            //   }
             //
-            // 3) If a schematic file does not exist, that entry is skipped automatically.
-            //    如果 schematic 文件不存在，该条目会自动跳过，不会加载。
-            //
-            // 4) chance = 40 means about 1/40 probability per generation check.
-            //    chance = 40 表示每次生成检查约 1/40 概率。
+            // Note:
+            // - chance = 40 means about 1/40 probability per generation check.
+            // - Unknown lootProfile id falls back to "default".
             {
               "enabled": true,
               "schematicsDir": "schematics",
@@ -96,28 +150,47 @@ public final class StructureWorldgenPlayerConfigLoader {
                   "distanceScope": "all",
                   "biomeMode": "whitelist",
                   "biomeIds": [],
-                  "biomeNames": []
-                },
-                {
-                  "enabled": true,
-                  "name": "test_nether",
-                  "schematicPath": "test_nether.schematic",
-                  "dimension": "the_nether",
-                  "weight": 1,
-                  "chance": 40,
-                  "attempts": 1,
-                  "surface": true,
-                  "minY": 0,
-                  "maxY": 255,
-                  "yOffset": 0,
-                  "centerOnAnchor": true,
-                  "minDistance": 0,
-                  "distanceScope": "all",
-                  "biomeMode": "whitelist",
-                  "biomeIds": [],
-                  "biomeNames": []
+                  "biomeNames": [],
+                  "loot": {
+                    "enabled": true,
+                    "profile": "default"
+                  }
                 }
-              ]
+              ],
+              "loot": {
+                "enabled": true,
+                "profiles": [
+                  {
+                    "id": "default",
+                    "markers": [
+                      { "item": "stick", "level": 1 },
+                      { "item": "flint", "level": 2 },
+                      { "item": "coal", "level": 3 },
+                      { "item": "ingotIron", "level": 4 },
+                      { "item": "ingotGold", "level": 5 },
+                      { "item": "diamond", "level": 6 }
+                    ],
+                    "levels": [
+                      {
+                        "level": 1,
+                        "minRolls": 3,
+                        "maxRolls": 5,
+                        "entries": [
+                          { "item": "stick", "meta": 0, "min": 1, "max": 1, "weight": 25 }
+                        ]
+                      },
+                      {
+                        "level": 6,
+                        "minRolls": 6,
+                        "maxRolls": 9,
+                        "entries": [
+                          { "item": "diamond", "meta": 0, "min": 1, "max": 1, "weight": 16 }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
             }
             """;
 
@@ -227,6 +300,8 @@ public final class StructureWorldgenPlayerConfigLoader {
             return 0;
         }
 
+        boolean rootLootTableEnabled = resolveRootLootTableEnabled(root);
+        Map<String, StructureLootProfile> lootProfiles = parseLootProfiles(root);
         File schematicsBaseDir = resolveSchematicsBaseDir(
                 getString(root, ROOT_SCHEMATICS_DIR_KEY, DEFAULT_SCHEMATICS_DIR_NAME),
                 absoluteConfigFile);
@@ -281,9 +356,20 @@ public final class StructureWorldgenPlayerConfigLoader {
             int yOffset = getInt(entry, Y_OFFSET_KEY, 0);
             boolean centerOnAnchor = getBoolean(entry, CENTER_ON_ANCHOR_KEY, true);
             int minDistance = getInt(entry, MIN_DISTANCE_KEY, 0);
+            boolean lootTableEnabled = resolveEntryLootTableEnabled(entry, rootLootTableEnabled);
             StructureWorldgenConfig.DistanceScope distanceScope = parseDistanceScope(
                     getString(entry, DISTANCE_SCOPE_KEY, "all"),
                     i);
+            String lootProfileId = resolveEntryLootProfileId(entry);
+            StructureLootProfile lootProfile = lootProfiles.get(lootProfileId);
+            if (lootProfile == null) {
+                WorldGen.LOGGER.warn(
+                        "Unknown lootProfile '{}' in config entry[{}], fallback to '{}'",
+                        lootProfileId,
+                        i,
+                        StructureLootProfiles.DEFAULT_PROFILE_ID);
+                lootProfile = StructureLootProfiles.defaultProfile();
+            }
             Predicate<BiomeGenBase> biomeFilter = parseBiomeFilter(entry, i);
 
             try {
@@ -298,7 +384,9 @@ public final class StructureWorldgenPlayerConfigLoader {
                         .yOffset(yOffset)
                         .centerOnAnchor(centerOnAnchor)
                         .minDistance(minDistance)
-                        .distanceScope(distanceScope);
+                        .distanceScope(distanceScope)
+                        .lootTableEnabled(lootTableEnabled)
+                        .lootProfile(lootProfile);
                 if (biomeFilter != null) {
                     builder.biomeFilter(biomeFilter);
                 }
@@ -372,11 +460,25 @@ public final class StructureWorldgenPlayerConfigLoader {
     }
 
     private static JsonArray getArray(JsonObject object, String key) {
+        if (object == null) {
+            return null;
+        }
         JsonElement element = object.get(key);
         if (element == null || element.isJsonNull()) {
             return null;
         }
         return element.isJsonArray() ? element.getAsJsonArray() : null;
+    }
+
+    private static JsonObject getObject(JsonObject object, String key) {
+        if (object == null) {
+            return null;
+        }
+        JsonElement element = object.get(key);
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        return element.isJsonObject() ? element.getAsJsonObject() : null;
     }
 
     private static String getString(JsonObject object, String key, String defaultValue) {
@@ -418,6 +520,478 @@ public final class StructureWorldgenPlayerConfigLoader {
         } catch (Exception ignored) {
             return defaultValue;
         }
+    }
+
+    private static boolean getBooleanWithAlias(
+            JsonObject object,
+            String primaryKey,
+            String aliasKey,
+            boolean defaultValue) {
+        if (object == null) {
+            return defaultValue;
+        }
+        JsonElement primary = object.get(primaryKey);
+        if (primary != null && !primary.isJsonNull()) {
+            try {
+                return primary.getAsBoolean();
+            } catch (Exception ignored) {
+            }
+        }
+
+        JsonElement alias = object.get(aliasKey);
+        if (alias != null && !alias.isJsonNull()) {
+            try {
+                return alias.getAsBoolean();
+            } catch (Exception ignored) {
+            }
+        }
+
+        return defaultValue;
+    }
+
+    private static boolean resolveLootEnabledFromObject(JsonObject lootObject, boolean defaultValue) {
+        if (lootObject == null) {
+            return defaultValue;
+        }
+        return getBooleanWithAlias(
+                lootObject,
+                LOOT_TABLE_ENABLED_KEY,
+                LOOT_ENABLED_ALIAS_KEY,
+                getBoolean(lootObject, LOOT_ENABLED_KEY, defaultValue));
+    }
+
+    private static boolean resolveRootLootTableEnabled(JsonObject root) {
+        boolean legacyEnabled = getBooleanWithAlias(
+                root,
+                ROOT_LOOT_TABLE_ENABLED_KEY,
+                ROOT_LOOT_ENABLED_ALIAS_KEY,
+                true);
+        JsonObject lootObject = getObject(root, ROOT_LOOT_KEY);
+        if (lootObject == null) {
+            return legacyEnabled;
+        }
+        return getBooleanWithAlias(
+                lootObject,
+                ROOT_LOOT_TABLE_ENABLED_KEY,
+                ROOT_LOOT_ENABLED_ALIAS_KEY,
+                getBoolean(lootObject, ROOT_LOOT_ENABLED_CHILD_KEY, legacyEnabled));
+    }
+
+    private static boolean resolveEntryLootTableEnabled(JsonObject entry, boolean rootDefault) {
+        boolean legacyEnabled = getBooleanWithAlias(
+                entry,
+                LOOT_TABLE_ENABLED_KEY,
+                LOOT_ENABLED_ALIAS_KEY,
+                rootDefault);
+        JsonObject entryLoot = getObject(entry, ENTRY_LOOT_KEY);
+        return resolveLootEnabledFromObject(entryLoot, legacyEnabled);
+    }
+
+    private static String resolveEntryLootProfileId(JsonObject entry) {
+        String profileId = getString(entry, LOOT_PROFILE_KEY, StructureLootProfiles.DEFAULT_PROFILE_ID);
+        JsonObject entryLoot = getObject(entry, ENTRY_LOOT_KEY);
+        if (entryLoot != null) {
+            profileId = getString(
+                    entryLoot,
+                    LOOT_PROFILE_KEY,
+                    getString(entryLoot, LOOT_PROFILE_ALIAS_KEY, profileId));
+        }
+        return normalizeLootProfileId(profileId);
+    }
+
+    private static JsonArray resolveRootLootProfileArray(JsonObject root) {
+        JsonObject lootObject = getObject(root, ROOT_LOOT_KEY);
+        if (lootObject != null) {
+            JsonArray profiles = getArray(lootObject, ROOT_LOOT_PROFILES_CHILD_KEY);
+            if (profiles != null) {
+                return profiles;
+            }
+            profiles = getArray(lootObject, ROOT_LOOT_PROFILES_KEY);
+            if (profiles != null) {
+                return profiles;
+            }
+        }
+        return getArray(root, ROOT_LOOT_PROFILES_KEY);
+    }
+
+    private static int resolveItemId(
+            JsonObject object,
+            String nameKey,
+            String legacyIdKey,
+            int defaultValue) {
+        if (object == null) {
+            return defaultValue;
+        }
+
+        JsonElement byName = object.get(nameKey);
+        if (byName != null && !byName.isJsonNull()) {
+            Integer resolved = resolveItemIdElement(byName);
+            if (resolved != null && resolved.intValue() > 0) {
+                return resolved.intValue();
+            }
+        }
+
+        JsonElement byId = object.get(legacyIdKey);
+        if (byId != null && !byId.isJsonNull()) {
+            Integer resolved = resolveItemIdElement(byId);
+            if (resolved != null && resolved.intValue() > 0) {
+                return resolved.intValue();
+            }
+        }
+
+        return defaultValue;
+    }
+
+    private static Integer resolveItemIdElement(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        try {
+            if (element.isJsonPrimitive() && element.getAsJsonPrimitive().isNumber()) {
+                int id = element.getAsInt();
+                return Item.getItem(id) != null ? Integer.valueOf(id) : null;
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            String raw = element.getAsString();
+            if (raw == null) {
+                return null;
+            }
+            String normalized = raw.trim();
+            if (normalized.isEmpty()) {
+                return null;
+            }
+
+            try {
+                int numeric = Integer.parseInt(normalized);
+                return Item.getItem(numeric) != null ? Integer.valueOf(numeric) : null;
+            } catch (NumberFormatException ignored) {
+            }
+
+            return resolveItemIdByAlias(normalized);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Integer resolveItemIdByAlias(String token) {
+        String normalized = normalizeAlias(token);
+        if (normalized == null) {
+            return null;
+        }
+        return getItemAliasToId().get(normalized);
+    }
+
+    private static synchronized Map<String, Integer> getItemAliasToId() {
+        if (cachedItemAliasToId != null) {
+            return cachedItemAliasToId;
+        }
+
+        Map<String, Integer> aliases = new HashMap<String, Integer>();
+        Item[] items = Item.itemsList;
+        if (items != null) {
+            for (Item item : items) {
+                if (item == null) {
+                    continue;
+                }
+                addItemAliases(aliases, item, item.itemID);
+            }
+        }
+
+        for (Field field : Item.class.getFields()) {
+            if (!Modifier.isStatic(field.getModifiers()) || !Item.class.isAssignableFrom(field.getType())) {
+                continue;
+            }
+            try {
+                Object value = field.get(null);
+                if (!(value instanceof Item)) {
+                    continue;
+                }
+                Item item = (Item) value;
+                if (item == null) {
+                    continue;
+                }
+                addAlias(aliases, field.getName(), item.itemID);
+                addAlias(aliases, "minecraft:" + field.getName(), item.itemID);
+            } catch (Exception ignored) {
+            }
+        }
+
+        cachedItemAliasToId = aliases;
+        return cachedItemAliasToId;
+    }
+
+    private static void addItemAliases(Map<String, Integer> aliases, Item item, int itemId) {
+        if (item == null || itemId <= 0) {
+            return;
+        }
+        addAlias(aliases, String.valueOf(itemId), itemId);
+
+        String unlocalized = null;
+        try {
+            unlocalized = item.getUnlocalizedName();
+        } catch (Exception ignored) {
+        }
+        if (unlocalized != null) {
+            addAlias(aliases, unlocalized, itemId);
+            if (unlocalized.startsWith("item.")) {
+                String stripped = unlocalized.substring("item.".length());
+                addAlias(aliases, stripped, itemId);
+                addAlias(aliases, "minecraft:" + stripped, itemId);
+            }
+        }
+
+        String refName = null;
+        try {
+            refName = item.getNameForReferenceFile();
+        } catch (Exception ignored) {
+        }
+        if (refName != null) {
+            addAlias(aliases, refName, itemId);
+            addAlias(aliases, "minecraft:" + refName, itemId);
+        }
+
+        if (item instanceof INamespaced) {
+            try {
+                INamespaced namespaced = (INamespaced) item;
+                String namespace = namespaced.getNamespace();
+                String normalizedNs = namespace == null ? null : namespace.trim().toLowerCase(Locale.ROOT);
+                if (normalizedNs != null && !normalizedNs.isEmpty()) {
+                    if (unlocalized != null && unlocalized.startsWith("item.")) {
+                        addAlias(aliases, normalizedNs + ":" + unlocalized.substring("item.".length()), itemId);
+                    }
+                    if (refName != null) {
+                        addAlias(aliases, normalizedNs + ":" + refName, itemId);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private static void addAlias(Map<String, Integer> aliases, String alias, int itemId) {
+        String normalized = normalizeAlias(alias);
+        if (normalized == null || aliases.containsKey(normalized)) {
+            return;
+        }
+        aliases.put(normalized, Integer.valueOf(itemId));
+    }
+
+    private static String normalizeAlias(String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        int colon = normalized.indexOf(':');
+        if (colon >= 0 && colon + 1 < normalized.length()) {
+            String namespace = normalized.substring(0, colon);
+            String path = normalized.substring(colon + 1);
+            if (path.startsWith("item.")) {
+                path = path.substring("item.".length());
+            }
+            return path.isEmpty() ? namespace : namespace + ":" + path;
+        }
+        if (normalized.startsWith("item.")) {
+            String stripped = normalized.substring("item.".length());
+            return stripped.isEmpty() ? normalized : stripped;
+        }
+        return normalized;
+    }
+
+    private static Map<String, StructureLootProfile> parseLootProfiles(JsonObject root) {
+        Map<String, StructureLootProfile> profiles =
+                new LinkedHashMap<String, StructureLootProfile>();
+        profiles.put(StructureLootProfiles.DEFAULT_PROFILE_ID, StructureLootProfiles.defaultProfile());
+
+        JsonArray profileArray = resolveRootLootProfileArray(root);
+        if (profileArray == null || profileArray.size() == 0) {
+            return profiles;
+        }
+
+        for (int profileIndex = 0; profileIndex < profileArray.size(); ++profileIndex) {
+            JsonElement profileElement = profileArray.get(profileIndex);
+            if (profileElement == null || !profileElement.isJsonObject()) {
+                WorldGen.LOGGER.warn("Skip lootProfiles[{}]: expected JSON object", profileIndex);
+                continue;
+            }
+
+            JsonObject profileObject = profileElement.getAsJsonObject();
+            String rawId = getString(profileObject, LOOT_PROFILE_ID_KEY, null);
+            String profileId = StructureLootProfiles.normalizeId(rawId);
+            if (profileId == null) {
+                WorldGen.LOGGER.warn("Skip lootProfiles[{}]: missing '{}'", profileIndex, LOOT_PROFILE_ID_KEY);
+                continue;
+            }
+
+            try {
+                StructureLootProfiles.Builder builder = StructureLootProfiles.builder(profileId);
+
+                JsonArray markers = getArray(profileObject, LOOT_PROFILE_MARKERS_KEY);
+                if (markers != null) {
+                    for (int markerIndex = 0; markerIndex < markers.size(); ++markerIndex) {
+                        JsonElement markerElement = markers.get(markerIndex);
+                        if (markerElement == null || !markerElement.isJsonObject()) {
+                            WorldGen.LOGGER.warn(
+                                    "Skip lootProfiles[{}].markers[{}]: expected JSON object",
+                                    profileIndex,
+                                    markerIndex);
+                            continue;
+                        }
+
+                        JsonObject marker = markerElement.getAsJsonObject();
+                        int itemId = resolveItemId(marker, LOOT_MARKER_ITEM_KEY, LOOT_MARKER_ITEM_ID_KEY, -1);
+                        int level = getInt(marker, LOOT_MARKER_LEVEL_KEY, 0);
+                        if (itemId <= 0 || level <= 0) {
+                            WorldGen.LOGGER.warn(
+                                    "Skip lootProfiles[{}].markers[{}]: invalid item {} / itemId {} / level {}",
+                                    profileIndex,
+                                    markerIndex,
+                                    getString(marker, LOOT_MARKER_ITEM_KEY, null),
+                                    itemId,
+                                    level);
+                            continue;
+                        }
+                        builder.marker(itemId, level);
+                    }
+                }
+
+                JsonArray levels = getArray(profileObject, LOOT_PROFILE_LEVELS_KEY);
+                if (levels != null) {
+                    for (int levelIndex = 0; levelIndex < levels.size(); ++levelIndex) {
+                        JsonElement levelElement = levels.get(levelIndex);
+                        if (levelElement == null || !levelElement.isJsonObject()) {
+                            WorldGen.LOGGER.warn(
+                                    "Skip lootProfiles[{}].levels[{}]: expected JSON object",
+                                    profileIndex,
+                                    levelIndex);
+                            continue;
+                        }
+
+                        JsonObject levelObject = levelElement.getAsJsonObject();
+                        int level = getInt(levelObject, LOOT_MARKER_LEVEL_KEY, 0);
+                        int minRolls = Math.max(0, getInt(levelObject, LOOT_LEVEL_MIN_ROLLS_KEY, 0));
+                        int maxRolls = Math.max(minRolls, getInt(levelObject, LOOT_LEVEL_MAX_ROLLS_KEY, minRolls));
+                        WeightedRandomChestContent[] entries = parseLootEntries(
+                                getArray(levelObject, LOOT_LEVEL_ENTRIES_KEY),
+                                profileIndex,
+                                levelIndex);
+                        float[] artifactChances = parseArtifactChances(
+                                getArray(levelObject, LOOT_LEVEL_ARTIFACT_CHANCES_KEY),
+                                profileIndex,
+                                levelIndex);
+
+                        if (level <= 0) {
+                            WorldGen.LOGGER.warn(
+                                    "Skip lootProfiles[{}].levels[{}]: invalid level {}",
+                                    profileIndex,
+                                    levelIndex,
+                                    level);
+                            continue;
+                        }
+
+                        builder.level(level, minRolls, maxRolls, entries, artifactChances);
+                    }
+                }
+
+                StructureLootProfile profile = builder.build();
+                profiles.put(profile.id(), profile);
+            } catch (Exception e) {
+                WorldGen.LOGGER.warn(
+                        "Skip lootProfiles[{}] id='{}': {}",
+                        profileIndex,
+                        profileId,
+                        e.getMessage());
+            }
+        }
+
+        return profiles;
+    }
+
+    private static WeightedRandomChestContent[] parseLootEntries(
+            JsonArray entries,
+            int profileIndex,
+            int levelIndex) {
+        if (entries == null || entries.size() == 0) {
+            return new WeightedRandomChestContent[0];
+        }
+
+        List<WeightedRandomChestContent> output = new ArrayList<WeightedRandomChestContent>();
+        for (int entryIndex = 0; entryIndex < entries.size(); ++entryIndex) {
+            JsonElement entryElement = entries.get(entryIndex);
+            if (entryElement == null || !entryElement.isJsonObject()) {
+                WorldGen.LOGGER.warn(
+                        "Skip lootProfiles[{}].levels[{}].entries[{}]: expected JSON object",
+                        profileIndex,
+                        levelIndex,
+                        entryIndex);
+                continue;
+            }
+
+            JsonObject entryObject = entryElement.getAsJsonObject();
+            int itemId = resolveItemId(entryObject, LOOT_ENTRY_ITEM_KEY, LOOT_ENTRY_ITEM_ID_KEY, -1);
+            if (itemId <= 0) {
+                WorldGen.LOGGER.warn(
+                        "Skip lootProfiles[{}].levels[{}].entries[{}]: invalid item {} / itemId {}",
+                        profileIndex,
+                        levelIndex,
+                        entryIndex,
+                        getString(entryObject, LOOT_ENTRY_ITEM_KEY, null),
+                        itemId);
+                continue;
+            }
+
+            int meta = Math.max(0, getInt(entryObject, LOOT_ENTRY_META_KEY, 0));
+            int minCount = Math.max(1, getInt(entryObject, LOOT_ENTRY_MIN_KEY, 1));
+            int maxCount = Math.max(minCount, getInt(entryObject, LOOT_ENTRY_MAX_KEY, minCount));
+            int weight = Math.max(1, getInt(entryObject, LOOT_ENTRY_WEIGHT_KEY, 1));
+
+            output.add(new WeightedRandomChestContent(itemId, meta, minCount, maxCount, weight));
+        }
+
+        return output.toArray(new WeightedRandomChestContent[0]);
+    }
+
+    private static float[] parseArtifactChances(JsonArray values, int profileIndex, int levelIndex) {
+        if (values == null || values.size() == 0) {
+            return null;
+        }
+
+        float[] buffer = new float[values.size()];
+        int count = 0;
+        for (int i = 0; i < values.size(); ++i) {
+            JsonElement element = values.get(i);
+            if (element == null || element.isJsonNull()) {
+                continue;
+            }
+            try {
+                float value = element.getAsFloat();
+                if (value < 0.0F) {
+                    value = 0.0F;
+                }
+                buffer[count++] = value;
+            } catch (Exception ignored) {
+                WorldGen.LOGGER.warn(
+                        "Skip lootProfiles[{}].levels[{}].artifactChances[{}]: invalid number",
+                        profileIndex,
+                        levelIndex,
+                        i);
+            }
+        }
+
+        if (count <= 0) {
+            return null;
+        }
+        return count == buffer.length ? buffer : Arrays.copyOf(buffer, count);
+    }
+
+    private static String normalizeLootProfileId(String value) {
+        String normalized = StructureLootProfiles.normalizeId(value);
+        return normalized == null ? StructureLootProfiles.DEFAULT_PROFILE_ID : normalized;
     }
 
     private static Predicate<BiomeGenBase> parseBiomeFilter(JsonObject entry, int entryIndex) {

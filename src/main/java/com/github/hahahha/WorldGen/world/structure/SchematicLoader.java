@@ -123,12 +123,21 @@ final class SchematicLoader {
             }
         }
 
+        List<NBTTagCompound> entityTags = new ArrayList<NBTTagCompound>();
+        NBTTagList entities = root.getTagList("Entities");
+        for (int i = 0; i < entities.tagCount(); ++i) {
+            NBTBase base = entities.tagAt(i);
+            if (base instanceof NBTTagCompound) {
+                entityTags.add((NBTTagCompound) base);
+            }
+        }
+
         String materials = root.getString("Materials");
         if (materials != null && !materials.isEmpty() && !"Alpha".equalsIgnoreCase(materials)) {
             WorldGen.LOGGER.warn("结构格式不是 Alpha，已按 Alpha 读取: {} materials={}", source, materials);
         }
 
-        return new SchematicData(width, height, length, blockIds, metadata, tileEntityTags);
+        return new SchematicData(width, height, length, blockIds, metadata, tileEntityTags, entityTags);
     }
 
     private static byte[] expandAddBlocks(NBTTagCompound root, int expectedSize) {

@@ -15,6 +15,7 @@ final class SchematicData {
     private final int[] blockIds;
     private final byte[] metadata;
     private final List<NBTTagCompound> tileEntityTags;
+    private final List<NBTTagCompound> entityTags;
 
     SchematicData(
             int width,
@@ -22,13 +23,15 @@ final class SchematicData {
             int length,
             int[] blockIds,
             byte[] metadata,
-            List<NBTTagCompound> tileEntityTags) {
+            List<NBTTagCompound> tileEntityTags,
+            List<NBTTagCompound> entityTags) {
         this.width = width;
         this.height = height;
         this.length = length;
         this.blockIds = blockIds;
         this.metadata = metadata;
         this.tileEntityTags = Collections.unmodifiableList(tileEntityTags);
+        this.entityTags = Collections.unmodifiableList(entityTags);
     }
 
     int getWidth() {
@@ -53,6 +56,10 @@ final class SchematicData {
 
     List<NBTTagCompound> getTileEntityTags() {
         return this.tileEntityTags;
+    }
+
+    List<NBTTagCompound> getEntityTags() {
+        return this.entityTags;
     }
 
     private int index(int x, int y, int z) {

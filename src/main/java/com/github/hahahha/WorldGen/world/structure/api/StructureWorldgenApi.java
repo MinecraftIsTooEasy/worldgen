@@ -53,7 +53,7 @@ public final class StructureWorldgenApi {
         }
 
         WorldGen.LOGGER.info(
-                "Registered structure worldgen path={} name={} dim={} weight={} chance=1/{} attempts={} surface={} y={}..{} yOffset={} centerOnAnchor={} minDistance={} distanceScope={}",
+                "Registered structure worldgen path={} name={} dim={} weight={} chance=1/{} attempts={} surface={} y={}..{} yOffset={} centerOnAnchor={} minDistance={} distanceScope={} lootTableEnabled={} lootProfile={}",
                 config.schematicPath(),
                 config.structureName(),
                 config.dimension(),
@@ -66,7 +66,9 @@ public final class StructureWorldgenApi {
                 config.yOffset(),
                 config.centerOnAnchor(),
                 config.minDistance(),
-                config.distanceScope());
+                config.distanceScope(),
+                config.lootTableEnabled(),
+                config.lootProfile() == null ? "null" : config.lootProfile().id());
     }
 
     public static void register(

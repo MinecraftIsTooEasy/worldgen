@@ -1,4 +1,5 @@
 ﻿item.structure_compass.name=Structure Compass
+item.treasure_map.name=Treasure Map
 
 worldgen.gui.structure_compass.title=Structure Compass
 worldgen.gui.structure_compass.current_dimension=Current Dimension: %s
@@ -52,3 +53,15 @@ worldgen.command.structure_compass.list.custom.item=- %s
 worldgen.command.structure_compass.query.alias.list_zh=列表
 worldgen.command.structure_compass.query.alias.queryable_zh=可查询
 worldgen.command.structure_compass.query.alias.help_zh=帮助
+worldgen.item.treasure_map.prefix=[Treasure Map] %s
+worldgen.item.treasure_map.world_unavailable=Current world is unavailable, cannot search structures.
+worldgen.item.treasure_map.bind.success=Bound target %s at (%d, %d, %d), distance: %d.
+worldgen.item.treasure_map.bind.locked=This treasure map is now locked to this coordinate.
+worldgen.item.treasure_map.bind.current=Fixed target %s at (%d, %d, %d), dimension: %s
+worldgen.item.treasure_map.search.unsupported_dimension=Target %s does not generate in current dimension (%s).
+worldgen.item.treasure_map.search.not_found=No structure found within %d blocks: %s
+worldgen.item.treasure_map.tooltip.target=Target: %s
+worldgen.item.treasure_map.tooltip.unbound=Right click to find nearest target and lock this map.
+worldgen.item.treasure_map.tooltip.bound=Bound: %s
+worldgen.item.treasure_map.tooltip.position=Pos: (%d, %d, %d)
+worldgen.item.treasure_map.tooltip.dimension=Dimension: %s
