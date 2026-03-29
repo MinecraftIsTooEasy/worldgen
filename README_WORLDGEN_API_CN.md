@@ -1,17 +1,28 @@
-﻿# WorldGen 结构世界生成说明（中文）
+# WorldGenLib 结构世界生成说明（中文）
 
 英文版：`README_WORLDGEN_API.md`
+当前版本：`1.3.0`
+更新日志：`ChangeLogCN.md`
+
+## 1.3.0 更新要点
+
+- 结构检索能力增强：`StructureGenerationDataStore` 采用精确匹配 + 空间索引 + bigram 模糊索引，`VanillaStructureSearchService` 合并“已记录 + 预测候选”并做去重。
+- 配置/GUI/API 缓存链路补强：玩家配置根对象缓存、`itemId` 解析缓存、维度与 `distanceScope` 解析缓存、指南针自定义结构缓存、模组名 LRU 缓存、配置文件 API 结构列表缓存。
+- 新增并全量接入 `StringNormalization`（`trimToNull` / `trimLowerToNull` / `isBlank` / `normalizePath` / `extractModIdFromAssetsPath`），统一配置、指令、GUI、结构与藏宝图的字符串处理。
+- `StructureItemIdResolver` 升级为原子别名缓存 + miss 节流刷新，减少反射扫描与重复构建开销。
+- 藏宝图、战利品与实体替换链路统一到同一套归一化和物品名解析流程（`TreasureMapApi` / `StructureLootApi` / `StructureEntityReplacementApi`）。
+- 稳定性修正：`resolveModDisplayName` 的异常捕获收敛为 `catch (RuntimeException | LinkageError)`。
 
 本模组提供两个互不影响的入口：
 
-1. 玩家配置入口：`config/worldgen-structures.jsonc`
-2. 开发者 API 入口：`StructureWorldgenApi` / `StructureWorldgenConfig`
+1. 玩家配置入口：`config/WorldGenLib-structures.jsonc`
+2. 开发者 API 入口：`StructureWorldGenLibApi` / `StructureWorldGenLibConfig`
 
 ## 玩家配置入口
 
 首次启动会自动创建：
 
-- `config/worldgen-structures.jsonc`
+- `config/WorldGenLib-structures.jsonc`
 - `schematics/`（与 `config/` 同级）
 
 配置格式是 JSONC（JSON + 注释）。
@@ -53,6 +64,8 @@
 - `structures`：结构条目数组。
 - `loot.enabled`：标记箱战利品替换总开关（推荐写法）。
 - `loot.profiles`：战利品配置档数组（推荐写法）。
+- `entityReplacement.enabled`：生物替换总开关（推荐写法）。
+- `entityReplacement.profiles`：生物替换配置档数组（推荐写法）。
 - 兼容旧写法：根级 `lootTableEnabled` / `lootEnabled` / `lootProfiles` 仍然支持。
 
 ### 结构条目字段
@@ -64,6 +77,7 @@
 - `weight`：注册权重，`>= 1`。
 - `chance`：概率分母，`>= 1`（例如 `40` 表示约 `1/40`）。
 - `attempts`：每次装饰阶段尝试次数，`>= 1`。
+- 实际尝试次数为 `attempts * weight`（超过 `Integer.MAX_VALUE` 时会截断）。
 - `surface`：`true` 用地表高度，`false` 用 `minY..maxY` 随机高度。
 - `minY`：最小 Y，`0..255`。
 - `maxY`：最大 Y，`0..255` 且 `>= minY`。
@@ -75,6 +89,10 @@
 - `lootProfile`（可选，旧写法）：战利品配置档 ID，默认 `default`。用于标记箱子刷战利品规则。
 - `loot.enabled`（可选，推荐）：当前结构条目的战利品开关；未填写时继承根级 `loot.enabled`。
 - `loot.profile`（可选，推荐）：当前结构条目的战利品配置档 ID，默认 `default`。
+- `entityReplacementEnabled`（可选，旧写法）：当前结构条目的生物替换开关；未填写时继承根级开关。
+- `entityReplacementProfile`（可选，旧写法）：当前结构条目的生物替换配置档 ID，默认 `default`。
+- `entityReplacement.enabled`（可选，推荐）：当前结构条目的生物替换开关；未填写时继承根级 `entityReplacement.enabled`。
+- `entityReplacement.profile`（可选，推荐）：当前结构条目的生物替换配置档 ID，默认 `default`。
 - `biomeMode`（可选）：`whitelist` 或 `blacklist`。
 - `biomeIds`（可选）：群系 ID 列表，例如 `[4, 21]`。
 - `biomeNames`（可选）：群系名列表，例如 `["Forest", "Taiga"]`。
@@ -134,6 +152,10 @@
       "loot": {
         "enabled": true,
         "profile": "default"
+      },
+      "entityReplacement": {
+        "enabled": true,
+        "profile": "test10_entity"
       }
     },
     {
@@ -160,6 +182,35 @@
   "loot": {
     "enabled": true,
     "profiles": []
+  },
+  "entityReplacement": {
+    "enabled": true,
+    "profiles": [
+      {
+        "id": "test10_entity",
+        "levels": [
+          {
+            "level": 1,
+            "target": "Zombie"
+          },
+          {
+            "level": 2,
+            "target": "Skeleton",
+            "equipment": {
+              "mainHand": { "item": "swordIron" },
+              "helmet": { "item": "helmetIron" }
+            },
+            "drops": [
+              { "item": "ingotIron", "min": 1, "max": 1, "chance": 1.0 }
+            ]
+          },
+          {
+            "level": 3,
+            "target": "Spider"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -169,11 +220,20 @@
 - 放置结构前会先把整个结构体积（`width * height * length`）清空为空气。
 - 然后再放置 `.schematic` 里的非空气方块，并恢复方块实体。
 - 会读取并生成 `.schematic` 里的 `Entities`（玩家实体会被忽略）。
+- 支持按结构 profile 的生物替换：会在生成前按等级 `1/2/3` 将实体替换为目标生物。
+- 默认内置 `test10` 的替换映射：`1 -> Zombie`、`2 -> Skeleton`、`3 -> Spider`。
+- 生物替换配置档可自定义装备（主手/靴子/护腿/胸甲/头盔）和额外掉落表。
 - 支持“标记箱子刷战利品”：若结构中的箱子只放了一个标记物，会在生成时清空并按等级表填充战利品。
 - 标记等级默认映射：`stick->1`、`flint->2`、`coal->3`、`iron_ingot->4`、`gold_ingot->5`、`diamond->6`。
 - 成功生成后会记录结构路径/名称/维度/坐标/尺寸，用于后续搜索与间距判定。
 - 间距判定只在同维度内进行，按 XZ 平面的包围盒距离计算。
 - 如果实际距离 `< minDistance`，本次生成会跳过。
+
+生物替换调试开关：
+
+```powershell
+.\gradlew runClient -Dworldgenlib.debug.entityReplacement=true
+```
 
 ## 结构指南针（仅创造模式）
 
@@ -217,8 +277,8 @@
 
 ### 藏宝图开发者 API
 
-- `com.github.hahahha.WorldGen.world.structure.api.TreasureMapApi`
-- `com.github.hahahha.WorldGen.item.treasure.TreasureMapDefinition`
+- `com.github.hahahha.WorldGenLib.world.structure.api.TreasureMapApi`
+- `com.github.hahahha.WorldGenLib.item.treasure.TreasureMapDefinition`
 
 示例（在物品注册事件前调用）：
 
@@ -236,40 +296,129 @@ TreasureMapApi.register(
 
 ## 开发者 API（兼容保留）
 
-- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi`
-- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig`
-- `com.github.hahahha.WorldGen.world.structure.api.StructureLootApi`
-- `com.github.hahahha.WorldGen.world.structure.StructureLootProfile`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureWorldGenLibApi`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureWorldGenLibConfig`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureLootApi`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureEntityReplacementApi`
+- `com.github.hahahha.WorldGenLib.world.structure.StructureEntityReplacementProfile`
+- `com.github.hahahha.WorldGenLib.world.structure.StructureLootProfile`
 
 示例代码文件（纯 API 注册，不混用配置文件）：
 
-- `com.github.hahahha.WorldGen.world.structure.example.Test10ApiStructureRegistration`
+- `com.github.hahahha.WorldGenLib.world.structure.example.Test10ApiStructureRegistration`
 
 `test10.schematic` 示例（战利品显式注册 + 结构全参数默认值显式填写）：
 
 ```java
+// =========================
+// 1) 战利品 Profile 定义
+// =========================
+// 约定：全部使用 namespaced key（modid:item），不使用数字 ID。
+// 好处：可读性高、跨模组冲突风险低、后续迁移更稳。
 private static final StructureLootProfile TEST10_LOOT_PROFILE = StructureLootApi.builder("test10_loot")
-        .marker(Item.stick, 1)
-        .marker(Item.diamond, 6)
+        // 标记物 -> 等级映射（结构箱子里放 1 个标记物时触发对应等级掉落）
+        .marker("minecraft:stick", 1)
+        .marker("minecraft:diamond", 6)
+        // 等级 1~3：minRoll=3, maxRoll=5
         .level(
                 1,
                 3,
                 5,
                 new WeightedRandomChestContent[]{
-                        StructureLootApi.entry(Item.coal, 0, 1, 3, 20),
-                        StructureLootApi.entry(Item.flint, 0, 1, 2, 15)
+                        // entry(item, meta, min, max, weight)
+                        StructureLootApi.entry("minecraft:coal", 0, 1, 3, 20),
+                        StructureLootApi.entry("minecraft:stick", 0, 1, 2, 15)
                 })
+        // 等级 6：更高价值掉落
         .level(
                 6,
                 6,
                 9,
                 new WeightedRandomChestContent[]{
-                        StructureLootApi.entry(Item.diamond, 0, 1, 2, 10),
-                        StructureLootApi.entry(Item.ingotGold, 0, 2, 5, 18)
+                        StructureLootApi.entry("minecraft:diamond", 0, 1, 2, 10),
+                        StructureLootApi.entry("minecraft:ingotGold", 0, 2, 5, 18)
                 })
         .build();
 
-StructureWorldgenConfig config = StructureWorldgenApi.builder("/assets/worldgen/structures/test10.schematic")
+// 缓存实体替换 profile，避免重复构建。
+private static volatile StructureEntityReplacementProfile cachedEntityReplacementProfile;
+
+// =========================
+// 2) 实体替换 Profile（懒加载）
+// =========================
+// 重点：不要在注册阶段提前解析装备物品键。
+// 原因：启动早期物品别名表可能尚未稳定，容易出现“某些键偶发解析失败”。
+private static StructureEntityReplacementProfile getEntityReplacementProfile() {
+    StructureEntityReplacementProfile cached = cachedEntityReplacementProfile;
+    if (cached != null) {
+        return cached;
+    }
+    synchronized (Test10ApiStructureRegistration.class) {
+        cached = cachedEntityReplacementProfile;
+        if (cached != null) {
+            return cached;
+        }
+        StructureEntityReplacementProfile created = createEntityReplacementProfile();
+        cachedEntityReplacementProfile = created;
+        return created;
+    }
+}
+
+// 实际构建替换规则。
+private static StructureEntityReplacementProfile createEntityReplacementProfile() {
+    StructureEntityReplacementApi.EntityReplacementProfileBuilder builder =
+            StructureEntityReplacementApi.builder("test10_entity")
+                    // 等级 1：僵尸
+                    .level(1, "Zombie")
+                    // 等级 2：骷髅（并附加装备/掉落）
+                    .level(2, "Skeleton")
+                    // 等级 3：蜘蛛
+                    .level(3, "Spider");
+
+    // 等级 2 主手：铁剑
+    ItemStack mainHand = tryResolveStack("minecraft:swordIron", 1, 0);
+    if (mainHand != null) {
+        builder.mainHand(2, mainHand);
+    }
+
+    // 等级 2 头盔：铁头盔
+    ItemStack helmet = tryResolveStack("minecraft:helmetIron", 1, 0);
+    if (helmet != null) {
+        builder.helmet(2, helmet);
+    }
+
+    // 等级 2 额外掉落：铁锭（100%）
+    StructureEntityReplacementProfile.EntityDrop drop =
+            tryResolveDrop("minecraft:ingotIron", 0, 1, 1, 1.0F);
+    if (drop != null) {
+        builder.drop(2, drop);
+    }
+
+    return builder.build();
+}
+
+private static ItemStack tryResolveStack(String itemName, int count, int meta) {
+    try {
+        // 名称解析失败时抛 IllegalArgumentException，这里吞掉并返回 null。
+        return StructureEntityReplacementApi.stack(itemName, count, meta);
+    } catch (IllegalArgumentException ignored) {
+        return null;
+    }
+}
+
+private static StructureEntityReplacementProfile.EntityDrop tryResolveDrop(
+        String itemName, int meta, int minCount, int maxCount, float chance) {
+    try {
+        return StructureEntityReplacementApi.drop(itemName, meta, minCount, maxCount, chance);
+    } catch (IllegalArgumentException ignored) {
+        return null;
+    }
+}
+
+// =========================
+// 3) 结构注册
+// =========================
+StructureWorldGenLibConfig config = StructureWorldGenLibApi.builder("/assets/worldgenlib/structures/test10.schematic")
         .structureName("test10")
         .dimension(Dimension.OVERWORLD)
         .weight(1)
@@ -280,19 +429,36 @@ StructureWorldgenConfig config = StructureWorldgenApi.builder("/assets/worldgen/
         .yOffset(0)
         .centerOnAnchor(true)
         .minDistance(0)
-        .distanceScope(StructureWorldgenConfig.DistanceScope.ALL)
+        .distanceScope(StructureWorldGenLibConfig.DistanceScope.ALL)
         .lootTableEnabled(true)
         .lootProfile(TEST10_LOOT_PROFILE)
+        .entityReplacementEnabled(true)
+        // 关键：传 supplier，在“实际生成时”才取 profile，避免注册时机问题。
+        .entityReplacementProfileSupplier("test10_entity", Test10ApiStructureRegistration::getEntityReplacementProfile)
         .build();
 
-StructureWorldgenApi.register(event, config);
+StructureWorldGenLibApi.register(event, config);
+```
+
+注册结果查询便捷方法：
+
+```java
+StructureWorldGenLibApi.listRegisteredStructures(10);
+StructureWorldGenLibApi.listRegisteredStructures(10, 0); // 维度 0（主世界）
+StructureWorldGenLibApi.listRegisteredStructureNames(10);
+StructureWorldGenLibApi.listRegisteredStructureNames(10, 0);
 ```
 
 ## 可选文件 API
 
-- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfigFileApi`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureWorldGenLibConfigFileApi`
 
 ```java
-StructureWorldgenConfigFileApi.registerFromDefaultConfig(event);
-StructureWorldgenConfigFileApi.registerFromFile(event, new File("config/my-structures.jsonc"));
+StructureWorldGenLibConfigFileApi.registerFromDefaultConfig(event);
+StructureWorldGenLibConfigFileApi.registerFromFile(event, new File("config/my-structures.jsonc"));
+
+StructureWorldGenLibConfigFileApi.listConfiguredStructures(10);
+StructureWorldGenLibConfigFileApi.listConfiguredStructures(10, 0); // 维度 0（主世界）
+StructureWorldGenLibConfigFileApi.listConfiguredStructureNames(10);
+StructureWorldGenLibConfigFileApi.listConfiguredStructureNames(10, 0);
 ```

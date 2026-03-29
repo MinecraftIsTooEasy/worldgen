@@ -1,11 +1,22 @@
-# WorldGen Structure Generation
+# WorldGenLib Structure Generation
 
 Chinese version: `README_WORLDGEN_API_CN.md`
+Current version: `1.3.0`
+Changelog (CN): `ChangeLogCN.md`
+
+## 1.3.0 Highlights
+
+- Search pipeline upgrades: `StructureGenerationDataStore` now combines exact-match, spatial, and bigram-fuzzy indexes, while `VanillaStructureSearchService` merges known + predictive candidates with deduplication.
+- Stronger cache path for config/GUI/API: root config cache, `itemId` parse cache, dimension/`distanceScope` parse cache, compass custom-option cache, mod-name LRU cache, and config-file API list cache.
+- Added and fully adopted `StringNormalization` (`trimToNull`, `trimLowerToNull`, `isBlank`, `normalizePath`, `extractModIdFromAssetsPath`) across config, commands, GUI, structure registration/search, and treasure-map flow.
+- `StructureItemIdResolver` now uses atomic alias caching with throttled miss refresh to reduce repeated reflection scans and alias rebuild cost.
+- Treasure map, loot, and entity-replacement paths now share the same normalization and item-name resolution chain (`TreasureMapApi` / `StructureLootApi` / `StructureEntityReplacementApi`).
+- Narrowed GUI exception handling in `resolveModDisplayName` from `catch (Throwable)` to `catch (RuntimeException | LinkageError)`.
 
 This mod provides two independent entry points:
 
-1. Player config entry: `config/worldgen-structures.jsonc`
-2. Developer API entry: `StructureWorldgenApi` / `StructureWorldgenConfig`
+1. Player config entry: `config/WorldGenLib-structures.jsonc`
+2. Developer API entry: `StructureWorldGenLibApi` / `StructureWorldGenLibConfig`
 
 These two paths do not affect each other.
 
@@ -13,7 +24,7 @@ These two paths do not affect each other.
 
 On first start, these are auto-created:
 
-- `config/worldgen-structures.jsonc`
+- `config/WorldGenLib-structures.jsonc`
 - `schematics/` (sibling to `config/`)
 
 Config file format is JSONC (JSON + comments).
@@ -55,6 +66,8 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 - `structures`: structure entry array.
 - `loot.enabled`: global marker-chest loot switch (recommended).
 - `loot.profiles`: loot profile array (recommended).
+- `entityReplacement.enabled`: global entity-replacement switch (recommended).
+- `entityReplacement.profiles`: entity-replacement profile array (recommended).
 - Legacy root keys are still supported: `lootTableEnabled` / `lootEnabled` / `lootProfiles`.
 
 ### Structure entry fields
@@ -66,6 +79,7 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 - `weight`: registration weight, `>= 1`.
 - `chance`: denominator of probability, `>= 1` (for example `40` means about `1/40`).
 - `attempts`: attempts per decoration pass, `>= 1`.
+- Effective generation attempts are `attempts * weight` (clamped to `Integer.MAX_VALUE`).
 - `surface`: `true` uses surface height, `false` uses random `minY..maxY`.
 - `minY`: minimum Y, `0..255`.
 - `maxY`: maximum Y, `0..255` and `>= minY`.
@@ -77,6 +91,10 @@ Note: classpath resources come from packaged mod resources (`src/main/resources`
 - `lootProfile` (optional, legacy): loot profile id, default `default`. Controls marker-chest loot rules.
 - `loot.enabled` (optional, recommended): per-structure loot switch. If absent, uses root `loot.enabled`.
 - `loot.profile` (optional, recommended): per-structure loot profile id, default `default`.
+- `entityReplacementEnabled` (optional, legacy): per-structure entity-replacement switch. If absent, uses root switch.
+- `entityReplacementProfile` (optional, legacy): per-structure entity-replacement profile id, default `default`.
+- `entityReplacement.enabled` (optional, recommended): per-structure entity-replacement switch. If absent, uses root `entityReplacement.enabled`.
+- `entityReplacement.profile` (optional, recommended): per-structure entity-replacement profile id, default `default`.
 - `biomeMode` (optional): `whitelist` or `blacklist`.
 - `biomeIds` (optional): biome id list, such as `[4, 21]`.
 - `biomeNames` (optional): biome name list, such as `["Forest", "Taiga"]`.
@@ -136,6 +154,10 @@ If a chest in schematic contains exactly one marker item, loot is generated when
       "loot": {
         "enabled": true,
         "profile": "default"
+      },
+      "entityReplacement": {
+        "enabled": true,
+        "profile": "test10_entity"
       }
     },
     {
@@ -162,6 +184,35 @@ If a chest in schematic contains exactly one marker item, loot is generated when
   "loot": {
     "enabled": true,
     "profiles": []
+  },
+  "entityReplacement": {
+    "enabled": true,
+    "profiles": [
+      {
+        "id": "test10_entity",
+        "levels": [
+          {
+            "level": 1,
+            "target": "Zombie"
+          },
+          {
+            "level": 2,
+            "target": "Skeleton",
+            "equipment": {
+              "mainHand": { "item": "swordIron" },
+              "helmet": { "item": "helmetIron" }
+            },
+            "drops": [
+              { "item": "ingotIron", "min": 1, "max": 1, "chance": 1.0 }
+            ]
+          },
+          {
+            "level": 3,
+            "target": "Spider"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
@@ -171,15 +222,24 @@ If a chest in schematic contains exactly one marker item, loot is generated when
 - Before placement, the generator clears the full schematic cuboid (`width * height * length`) with air.
 - Then it places non-air blocks from schematic data and restores tile entities.
 - It also reads and spawns `Entities` from the schematic (player entities are ignored).
+- Entity replacement is supported for profile-bound structures: level `1/2/3` entities can be remapped to target mobs before spawn.
+- Built-in `test10` replacement mapping: level `1 -> Zombie`, `2 -> Skeleton`, `3 -> Spider`.
+- Entity replacement profiles can also define custom equipment (main hand / armor) and extra drops.
 - Marker-chest loot generation is supported: if a chest in schematic contains exactly one marker item, it will be replaced with generated loot on placement.
 - Default marker mapping: `stick->1`, `flint->2`, `coal->3`, `iron_ingot->4`, `gold_ingot->5`, `diamond->6`.
 - On success, it records generated structure path/name/dimension/position/size for later search and spacing checks.
 - Spacing checks are same-dimension only and use horizontal (XZ) bounding-box distance.
 - If actual distance is `< minDistance`, this generation attempt is skipped.
 
+Entity replacement debug switch:
+
+```powershell
+.\gradlew runClient -Dworldgenlib.debug.entityReplacement=true
+```
+
 ## Structure Compass (creative only)
 
-- Item name: `Structure Compass` (`结构指南针` in Chinese translation).
+- Item name: `Structure Compass` (Chinese translation: `结构指南针`).
 - Texture uses vanilla compass texture key (`compass`).
 - No survival obtain method is added; item is available in creative tab `Tools`.
 - Right click opens a GUI, no manual command typing required.
@@ -219,8 +279,8 @@ If a chest in schematic contains exactly one marker item, loot is generated when
 
 ### Treasure map developer API
 
-- `com.github.hahahha.WorldGen.world.structure.api.TreasureMapApi`
-- `com.github.hahahha.WorldGen.item.treasure.TreasureMapDefinition`
+- `com.github.hahahha.WorldGenLib.world.structure.api.TreasureMapApi`
+- `com.github.hahahha.WorldGenLib.item.treasure.TreasureMapDefinition`
 
 Example (call before item registration event):
 
@@ -238,40 +298,106 @@ TreasureMapApi.register(
 
 ## Developer API (compatible)
 
-- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenApi`
-- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfig`
-- `com.github.hahahha.WorldGen.world.structure.api.StructureLootApi`
-- `com.github.hahahha.WorldGen.world.structure.StructureLootProfile`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureWorldGenLibApi`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureWorldGenLibConfig`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureLootApi`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureEntityReplacementApi`
+- `com.github.hahahha.WorldGenLib.world.structure.StructureEntityReplacementProfile`
+- `com.github.hahahha.WorldGenLib.world.structure.StructureLootProfile`
 
 Example source file (pure API registration, no config-file mixing):
 
-- `com.github.hahahha.WorldGen.world.structure.example.Test10ApiStructureRegistration`
+- `com.github.hahahha.WorldGenLib.world.structure.example.Test10ApiStructureRegistration`
 
 `test10.schematic` example (explicit loot-profile registration + full explicit default structure parameters):
 
 ```java
+// 1) Loot profile: use namespaced keys only, no numeric IDs.
 private static final StructureLootProfile TEST10_LOOT_PROFILE = StructureLootApi.builder("test10_loot")
-        .marker(Item.stick, 1)
-        .marker(Item.diamond, 6)
+        .marker("minecraft:stick", 1)
+        .marker("minecraft:diamond", 6)
         .level(
                 1,
                 3,
                 5,
                 new WeightedRandomChestContent[]{
-                        StructureLootApi.entry(Item.coal, 0, 1, 3, 20),
-                        StructureLootApi.entry(Item.flint, 0, 1, 2, 15)
+                        StructureLootApi.entry("minecraft:coal", 0, 1, 3, 20),
+                        StructureLootApi.entry("minecraft:stick", 0, 1, 2, 15)
                 })
         .level(
                 6,
                 6,
                 9,
                 new WeightedRandomChestContent[]{
-                        StructureLootApi.entry(Item.diamond, 0, 1, 2, 10),
-                        StructureLootApi.entry(Item.ingotGold, 0, 2, 5, 18)
+                        StructureLootApi.entry("minecraft:diamond", 0, 1, 2, 10),
+                        StructureLootApi.entry("minecraft:ingotGold", 0, 2, 5, 18)
                 })
         .build();
 
-StructureWorldgenConfig config = StructureWorldgenApi.builder("/assets/worldgen/structures/test10.schematic")
+private static volatile StructureEntityReplacementProfile cachedEntityReplacementProfile;
+
+// 2) Lazy-build the entity replacement profile:
+//    avoid resolving item aliases too early during registration.
+private static StructureEntityReplacementProfile getEntityReplacementProfile() {
+    StructureEntityReplacementProfile cached = cachedEntityReplacementProfile;
+    if (cached != null) {
+        return cached;
+    }
+    synchronized (Test10ApiStructureRegistration.class) {
+        cached = cachedEntityReplacementProfile;
+        if (cached != null) {
+            return cached;
+        }
+        StructureEntityReplacementProfile created = createEntityReplacementProfile();
+        cachedEntityReplacementProfile = created;
+        return created;
+    }
+}
+
+private static StructureEntityReplacementProfile createEntityReplacementProfile() {
+    StructureEntityReplacementApi.EntityReplacementProfileBuilder builder =
+            StructureEntityReplacementApi.builder("test10_entity")
+                    .level(1, "Zombie")
+                    .level(2, "Skeleton")
+                    .level(3, "Spider");
+
+    ItemStack mainHand = tryResolveStack("minecraft:swordIron", 1, 0);
+    if (mainHand != null) {
+        builder.mainHand(2, mainHand);
+    }
+
+    ItemStack helmet = tryResolveStack("minecraft:helmetIron", 1, 0);
+    if (helmet != null) {
+        builder.helmet(2, helmet);
+    }
+
+    StructureEntityReplacementProfile.EntityDrop drop =
+            tryResolveDrop("minecraft:ingotIron", 0, 1, 1, 1.0F);
+    if (drop != null) {
+        builder.drop(2, drop);
+    }
+
+    return builder.build();
+}
+
+private static ItemStack tryResolveStack(String itemName, int count, int meta) {
+    try {
+        return StructureEntityReplacementApi.stack(itemName, count, meta);
+    } catch (IllegalArgumentException ignored) {
+        return null;
+    }
+}
+
+private static StructureEntityReplacementProfile.EntityDrop tryResolveDrop(
+        String itemName, int meta, int minCount, int maxCount, float chance) {
+    try {
+        return StructureEntityReplacementApi.drop(itemName, meta, minCount, maxCount, chance);
+    } catch (IllegalArgumentException ignored) {
+        return null;
+    }
+}
+
+StructureWorldGenLibConfig config = StructureWorldGenLibApi.builder("/assets/worldgenlib/structures/test10.schematic")
         .structureName("test10")
         .dimension(Dimension.OVERWORLD)
         .weight(1)
@@ -282,19 +408,36 @@ StructureWorldgenConfig config = StructureWorldgenApi.builder("/assets/worldgen/
         .yOffset(0)
         .centerOnAnchor(true)
         .minDistance(0)
-        .distanceScope(StructureWorldgenConfig.DistanceScope.ALL)
+        .distanceScope(StructureWorldGenLibConfig.DistanceScope.ALL)
         .lootTableEnabled(true)
         .lootProfile(TEST10_LOOT_PROFILE)
+        .entityReplacementEnabled(true)
+        // 3) Key point: resolve replacement profile at generation time.
+        .entityReplacementProfileSupplier("test10_entity", Test10ApiStructureRegistration::getEntityReplacementProfile)
         .build();
 
-StructureWorldgenApi.register(event, config);
+StructureWorldGenLibApi.register(event, config);
+```
+
+Registered result query helpers:
+
+```java
+StructureWorldGenLibApi.listRegisteredStructures(10);
+StructureWorldGenLibApi.listRegisteredStructures(10, 0); // dimension 0 (overworld)
+StructureWorldGenLibApi.listRegisteredStructureNames(10);
+StructureWorldGenLibApi.listRegisteredStructureNames(10, 0);
 ```
 
 ## Optional file API
 
-- `com.github.hahahha.WorldGen.world.structure.api.StructureWorldgenConfigFileApi`
+- `com.github.hahahha.WorldGenLib.world.structure.api.StructureWorldGenLibConfigFileApi`
 
 ```java
-StructureWorldgenConfigFileApi.registerFromDefaultConfig(event);
-StructureWorldgenConfigFileApi.registerFromFile(event, new File("config/my-structures.jsonc"));
+StructureWorldGenLibConfigFileApi.registerFromDefaultConfig(event);
+StructureWorldGenLibConfigFileApi.registerFromFile(event, new File("config/my-structures.jsonc"));
+
+StructureWorldGenLibConfigFileApi.listConfiguredStructures(10);
+StructureWorldGenLibConfigFileApi.listConfiguredStructures(10, 0); // dimension 0 (overworld)
+StructureWorldGenLibConfigFileApi.listConfiguredStructureNames(10);
+StructureWorldGenLibConfigFileApi.listConfiguredStructureNames(10, 0);
 ```

@@ -1,0 +1,74 @@
+item.structure_compass.name=Structure Compass
+item.treasure_map.name=Treasure Map
+
+WorldGenLib.gui.structure_compass.title=Structure Compass
+WorldGenLib.gui.structure_compass.current_dimension=Current Dimension: %s
+WorldGenLib.gui.structure_compass.section.queryable=Queryable Structures:
+WorldGenLib.gui.structure_compass.section.vanilla=Vanilla Structures:
+WorldGenLib.gui.structure_compass.section.custom=Custom Structures:
+WorldGenLib.gui.structure_compass.section.custom.by_mod=By Source:
+WorldGenLib.gui.structure_compass.hint=If no button appears, input a structure name below.
+WorldGenLib.gui.structure_compass.button.search=Search Input
+WorldGenLib.gui.structure_compass.button.list=Queryable List
+WorldGenLib.gui.structure_compass.button.cancel=Cancel
+WorldGenLib.gui.structure_compass.custom_prefix=[Custom] %s
+WorldGenLib.gui.structure_compass.custom_with_source=[%s] %s
+WorldGenLib.gui.structure_compass.custom_source_mod=MOD
+WorldGenLib.gui.structure_compass.custom_source_mod_prefix=MOD: %s
+WorldGenLib.gui.structure_compass.custom_source_unknown=Config
+WorldGenLib.gui.structure_compass.input_required=[Structure Compass] Please input a structure name.
+
+WorldGenLib.dimension.overworld=Overworld
+WorldGenLib.dimension.nether=Nether
+WorldGenLib.dimension.end=The End
+WorldGenLib.dimension.unknown=Unknown(%d)
+WorldGenLib.dimension.none=None
+
+WorldGenLib.structure.vanilla.display_label=%s (%s)
+WorldGenLib.structure.vanilla.fortress=Nether Fortress
+WorldGenLib.structure.vanilla.stronghold=Stronghold
+WorldGenLib.structure.vanilla.village=Village
+WorldGenLib.structure.vanilla.mineshaft=Mineshaft
+WorldGenLib.structure.vanilla.temple=Temple
+WorldGenLib.structure.vanilla.desert_pyramid=Desert Pyramid
+WorldGenLib.structure.vanilla.jungle_pyramid=Jungle Pyramid
+WorldGenLib.structure.vanilla.witch_hut=Witch Hut
+
+WorldGenLib.command.structure_compass.prefix=[Structure Compass] %s
+WorldGenLib.command.structure_compass.only_player=This command can only be executed by players.
+WorldGenLib.command.structure_compass.world_unavailable=Current world is unavailable, cannot search structures.
+WorldGenLib.command.structure_compass.internal_only=This query is only available via Structure Compass or Treasure Map.
+WorldGenLib.command.structure_compass.vanilla.unsupported_dimension=Vanilla structure %s does not generate in current dimension. Supported dimensions: %s
+WorldGenLib.command.structure_compass.vanilla.not_found=No vanilla structure found within %d blocks: %s
+WorldGenLib.command.structure_compass.vanilla.found=Found %d vanilla structures (<= %d blocks): %s
+WorldGenLib.command.structure_compass.custom.not_found=No structure found within %d blocks: %s
+WorldGenLib.command.structure_compass.custom.no_records=No custom structure record exists in this save yet.
+WorldGenLib.command.structure_compass.custom.records_note=Records are written only when this mod successfully generates .schematic structures (no backfill).
+WorldGenLib.command.structure_compass.custom.none_in_dimension=No custom structure record in current dimension. Switch dimension or generate structures first.
+WorldGenLib.command.structure_compass.custom.tip_list=Type "list" to show queryable structures (including vanilla).
+WorldGenLib.command.structure_compass.custom.found=Found %d custom structures (<= %d blocks): %s
+WorldGenLib.command.structure_compass.result_line=%d) %s  Pos: (%d, %d, %d)  Dist: %d
+WorldGenLib.command.structure_compass.list.current_vanilla.none=No queryable vanilla structure type in current dimension.
+WorldGenLib.command.structure_compass.list.current_vanilla.title=Queryable vanilla structures in current dimension:
+WorldGenLib.command.structure_compass.list.all_vanilla.title=All vanilla structure types (version-fixed):
+WorldGenLib.command.structure_compass.list.vanilla.item_known=- %s | Discovered: %d
+WorldGenLib.command.structure_compass.list.vanilla.item_dimension=- %s | Dimensions: %s
+WorldGenLib.command.structure_compass.list.current_custom.none=No recorded custom structure names in current dimension.
+WorldGenLib.command.structure_compass.list.current_custom.title=Queryable custom structure names in current dimension:
+WorldGenLib.command.structure_compass.list.custom.item=- %s
+
+WorldGenLib.command.structure_compass.query.alias.list_zh=列表
+WorldGenLib.command.structure_compass.query.alias.queryable_zh=可查询
+WorldGenLib.command.structure_compass.query.alias.help_zh=帮助
+WorldGenLib.item.treasure_map.prefix=[Treasure Map] %s
+WorldGenLib.item.treasure_map.world_unavailable=Current world is unavailable, cannot search structures.
+WorldGenLib.item.treasure_map.bind.success=Bound target %s at (%d, %d, %d), distance: %d.
+WorldGenLib.item.treasure_map.bind.locked=This treasure map is now locked to this coordinate.
+WorldGenLib.item.treasure_map.bind.current=Fixed target %s at (%d, %d, %d), dimension: %s
+WorldGenLib.item.treasure_map.search.unsupported_dimension=Target %s does not generate in current dimension (%s).
+WorldGenLib.item.treasure_map.search.not_found=No structure found within %d blocks: %s
+WorldGenLib.item.treasure_map.tooltip.target=Target: %s
+WorldGenLib.item.treasure_map.tooltip.unbound=Right click to find nearest target and lock this map.
+WorldGenLib.item.treasure_map.tooltip.bound=Bound: %s
+WorldGenLib.item.treasure_map.tooltip.position=Pos: (%d, %d, %d)
+WorldGenLib.item.treasure_map.tooltip.dimension=Dimension: %s

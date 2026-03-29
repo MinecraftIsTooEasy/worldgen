@@ -1,0 +1,74 @@
+item.structure_compass.name=结构指南针
+item.treasure_map.name=藏宝图
+
+WorldGenLib.gui.structure_compass.title=结构指南针
+WorldGenLib.gui.structure_compass.current_dimension=当前维度: %s
+WorldGenLib.gui.structure_compass.section.queryable=可查询结构:
+WorldGenLib.gui.structure_compass.section.vanilla=原版结构:
+WorldGenLib.gui.structure_compass.section.custom=自定义结构:
+WorldGenLib.gui.structure_compass.section.custom.by_mod=按来源分组:
+WorldGenLib.gui.structure_compass.hint=若没有可点击按钮，请在下方输入结构名。
+WorldGenLib.gui.structure_compass.button.search=搜索输入
+WorldGenLib.gui.structure_compass.button.list=可查询列表
+WorldGenLib.gui.structure_compass.button.cancel=取消
+WorldGenLib.gui.structure_compass.custom_prefix=[自定义] %s
+WorldGenLib.gui.structure_compass.custom_with_source=[%s] %s
+WorldGenLib.gui.structure_compass.custom_source_mod=MOD
+WorldGenLib.gui.structure_compass.custom_source_mod_prefix=MOD：%s
+WorldGenLib.gui.structure_compass.custom_source_unknown=配置结构
+WorldGenLib.gui.structure_compass.input_required=[结构指南针] 请输入结构名。
+
+WorldGenLib.dimension.overworld=主世界
+WorldGenLib.dimension.nether=下界
+WorldGenLib.dimension.end=末地
+WorldGenLib.dimension.unknown=未知(%d)
+WorldGenLib.dimension.none=无
+
+WorldGenLib.structure.vanilla.display_label=%s (%s)
+WorldGenLib.structure.vanilla.fortress=下界要塞
+WorldGenLib.structure.vanilla.stronghold=要塞
+WorldGenLib.structure.vanilla.village=村庄
+WorldGenLib.structure.vanilla.mineshaft=废弃矿井
+WorldGenLib.structure.vanilla.temple=神殿
+WorldGenLib.structure.vanilla.desert_pyramid=沙漠神殿
+WorldGenLib.structure.vanilla.jungle_pyramid=丛林神殿
+WorldGenLib.structure.vanilla.witch_hut=女巫小屋
+
+WorldGenLib.command.structure_compass.prefix=[结构指南针] %s
+WorldGenLib.command.structure_compass.only_player=该指令只能由玩家执行。
+WorldGenLib.command.structure_compass.world_unavailable=当前世界不可用，无法搜索结构。
+WorldGenLib.command.structure_compass.internal_only=该查询仅可通过结构指南针或藏宝图触发。
+WorldGenLib.command.structure_compass.vanilla.unsupported_dimension=原版结构 %s 不会在当前维度生成。支持维度: %s
+WorldGenLib.command.structure_compass.vanilla.not_found=在 %d 格范围内未找到原版结构: %s
+WorldGenLib.command.structure_compass.vanilla.found=找到 %d 个原版结构（<= %d 格）: %s
+WorldGenLib.command.structure_compass.custom.not_found=在 %d 格范围内未找到结构: %s
+WorldGenLib.command.structure_compass.custom.no_records=当前存档还没有任何自定义结构记录。
+WorldGenLib.command.structure_compass.custom.records_note=仅当本模组成功生成 .schematic 结构时才会写入记录（不会补录）。
+WorldGenLib.command.structure_compass.custom.none_in_dimension=当前维度没有自定义结构记录。请切换维度或先生成结构。
+WorldGenLib.command.structure_compass.custom.tip_list=输入 "list" 可查看可查询结构（含原版）。
+WorldGenLib.command.structure_compass.custom.found=找到 %d 个自定义结构（<= %d 格）: %s
+WorldGenLib.command.structure_compass.result_line=%d) %s  坐标: (%d, %d, %d)  距离: %d
+WorldGenLib.command.structure_compass.list.current_vanilla.none=当前维度没有可查询的原版结构类型。
+WorldGenLib.command.structure_compass.list.current_vanilla.title=当前维度可查询的原版结构:
+WorldGenLib.command.structure_compass.list.all_vanilla.title=全部原版结构类型（固定版本）:
+WorldGenLib.command.structure_compass.list.vanilla.item_known=- %s | 已发现: %d
+WorldGenLib.command.structure_compass.list.vanilla.item_dimension=- %s | 维度: %s
+WorldGenLib.command.structure_compass.list.current_custom.none=当前维度没有已记录的自定义结构名称。
+WorldGenLib.command.structure_compass.list.current_custom.title=当前维度可查询的自定义结构名称:
+WorldGenLib.command.structure_compass.list.custom.item=- %s
+
+WorldGenLib.command.structure_compass.query.alias.list_zh=列表
+WorldGenLib.command.structure_compass.query.alias.queryable_zh=可查询
+WorldGenLib.command.structure_compass.query.alias.help_zh=帮助
+WorldGenLib.item.treasure_map.prefix=[藏宝图] %s
+WorldGenLib.item.treasure_map.world_unavailable=当前世界不可用，无法搜索结构。
+WorldGenLib.item.treasure_map.bind.success=已绑定目标 %s，坐标 (%d, %d, %d)，距离: %d。
+WorldGenLib.item.treasure_map.bind.locked=这张藏宝图已锁定到该坐标。
+WorldGenLib.item.treasure_map.bind.current=当前绑定目标 %s，坐标 (%d, %d, %d)，维度: %s
+WorldGenLib.item.treasure_map.search.unsupported_dimension=目标 %s 不会在当前维度生成（%s）。
+WorldGenLib.item.treasure_map.search.not_found=在 %d 格范围内未找到结构: %s
+WorldGenLib.item.treasure_map.tooltip.target=目标: %s
+WorldGenLib.item.treasure_map.tooltip.unbound=右键可搜索最近目标并绑定此地图。
+WorldGenLib.item.treasure_map.tooltip.bound=已绑定: %s
+WorldGenLib.item.treasure_map.tooltip.position=坐标: (%d, %d, %d)
+WorldGenLib.item.treasure_map.tooltip.dimension=维度: %s
